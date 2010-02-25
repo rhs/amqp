@@ -42,7 +42,7 @@ class Buffer:
   def pending(self):
     return len(self.bytes)
 
-def parse(input, state):
+def parse(state):
   while True:
     next = state()
     if next is None:

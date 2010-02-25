@@ -106,7 +106,7 @@ class FrameDecoder:
 
   def write(self, bytes):
     self.input.write(bytes)
-    self.state = parse(self.input, self.state)
+    self.state = parse(self.state)
 
   def __frame_header(self):
     if self.input.pending() >= FRAME_HDR:
