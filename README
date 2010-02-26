@@ -4,20 +4,23 @@ codec.
 
 Files:
 
-  codec.py      -- An implementation of the AMQP type system.
+  codec.py       -- An implementation of the AMQP type system.
 
-  framing.py    -- An implementation of the AMQP framing layer.
+  framing.py     -- An implementation of the AMQP framing layer.
 
-  mllib/        -- An XML parsing library used to load type definitions.
+  mllib/         -- An XML parsing library used to load type definitions.
 
-  README        -- This file.
+  operations.py  -- Classes representing all the operations and related
+                    types defined by the AMQP transport specification.
 
-  test.py       -- Some informal test code.
+  README         -- This file.
 
-  transport.xml -- Definitions from the AMQP transport specification.
+  test.py        -- Some informal test code.
 
-  types.xml     -- Definitions from the AMQP types specification. This
-                   includes encoding and type definitions used by
-                   codec.py.
+  transport.xml  -- Definitions from the AMQP transport specification.
 
-  util.py       -- Common utilities.
+  types.xml      -- Definitions from the AMQP types specification. This
+                    includes encoding and type definitions used by
+                    codec.py.
+
+  util.py        -- Common utilities.
