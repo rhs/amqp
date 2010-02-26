@@ -16,9 +16,10 @@ Files:
 
   test.py       -- Some informal test code.
 
-  transport.xml -- The AMQP transport specification.
+  transport.xml -- Definitions from the AMQP transport specification.
 
-  types.xml     -- The AMQP types specification. This includes encoding
-                   and type definitions used by codec.py.
+  types.xml     -- Definitions from the AMQP types specification. This
+                   includes encoding and type definitions used by
+                   codec.py.
 
   util.py       -- Common utilities.
