@@ -4,8 +4,6 @@ codec.
 
 Files:
 
-  amqp.dtd      -- DTD for transport.xml and types.xml.
-
   codec.py      -- An implementation of the AMQP type system.
 
   framing.py    -- An implementation of the AMQP framing layer.
