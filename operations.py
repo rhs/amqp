@@ -24,9 +24,9 @@ from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name):
+  def __init__(self, name, default=None):
     self.name = name
-    self.default = None
+    self.default = default
 
   def __repr__(self):
     return "Field(%r, %r)" % (self.name, self.default)
@@ -65,7 +65,7 @@ class Compound(object):
     return "%s(%s)" % (self.__class__.__name__, ", ".join(self._args()))
 
 class Operation(Compound):
-  FIELDS = [Field("channel")]
+  FIELDS = [Field("channel", 0)]
 
 class ConnectionOp(Operation):
 
