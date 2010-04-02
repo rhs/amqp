@@ -104,6 +104,7 @@ class TypeEncoder:
       str: self.enc_string,
       Symbol: self.enc_symbol,
       buffer: self.enc_binary,
+      uuid.UUID: self.enc_uuid,
       None.__class__: self.enc_null
       }
     self.deconstructors = {

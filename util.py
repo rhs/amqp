@@ -17,7 +17,7 @@
 # under the License.
 #
 
-import os, mllib
+import os, mllib, traceback
 
 class InsufficientCapacity(Exception): pass
 
@@ -33,6 +33,12 @@ class Buffer:
     result = self.bytes[:n]
     self.bytes = self.bytes[n:]
     return result
+
+  def peek(self, n=None):
+    if n is None:
+      return self.bytes
+    else:
+      return self.bytes[:n]
 
   def write(self, bytes):
     if self.capacity and len(self.bytes) + len(bytes) > self.capacity:
@@ -68,3 +74,42 @@ def decode_numeric_desc(descriptor):
 
 def identity(x):
   return x
+
+class ConnectionSelectable:
+
+  def __init__(self, socket, connection, tick):
+    self.socket = socket
+    self.connection = connection
+    self.tick = tick
+
+  def fileno(self):
+    return self.socket.fileno()
+
+  def timing(self):
+    return None
+
+  def reading(self):
+    return self.socket is not None
+
+  def writing(self):
+    if self.socket is None: return False
+    self.tick(self.connection)
+    return self.connection.pending()
+
+  def readable(self):
+    # XXX: hardcoded buffer size
+    try:
+      bytes = self.socket.recv(64*1024)
+      if bytes:
+        self.connection.write(bytes)
+        self.tick(self.connection)
+        return
+    except:
+      self.connection.trace("err", traceback.format_exc().strip())
+    self.socket.close()
+    # XXX: need to unregister
+    self.socket = None
+
+  def writeable(self):
+    n = self.socket.send(self.connection.peek())
+    bytes = self.connection.read(n)

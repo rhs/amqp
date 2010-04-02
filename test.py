@@ -75,3 +75,177 @@ for b in bytes:
   frames = frdec.read()
   if frames:
     print "Frames:", frames
+
+def connection():
+  from connection import Connection
+  from session import Session
+  from link import Sender, Receiver, link
+  from operations import Fragment
+
+  a = Connection(lambda n: Session(n, link))
+  b = Connection(lambda n: Session(n, link))
+
+  def pump():
+    while a.pending() or b.pending():
+      b.write(a.read())
+      a.write(b.read())
+
+  s = Session("test-ssn", link)
+  a.add(s)
+  s2 = Session("test-ssn2", link)
+  a.add(s2)
+
+  a.open(hostname="asdf")
+  b.open()
+  s.attach()
+  s2.attach()
+  s.detach(False)
+  s.attach()
+  l = Sender("qwer", source="S", target="T")
+  s.add(l)
+  l.link()
+
+  pump()
+
+  bssn = b.sessions["test-ssn"]
+  bssn.attach()
+  bl = bssn.links["qwer"]
+  bl.link()
+  bl.flow(10)
+
+  pump()
+
+  l.settle(l.send(fragments=Fragment(True, True, 0, 0, "asdf")))
+  tag = l.send(delivery_tag="blah", fragments=Fragment(True, True, 0, 0, "asdf"))
+
+  pump()
+
+  ln = bssn.links["qwer"]
+  x = ln.get()
+  print "INCOMING XFR:", x
+  ln.ack(x)
+
+  xfr = ln.get()
+  print "INCOMING XFR:", xfr
+  ln.ack(xfr, key="value")
+
+  print "--"
+
+  pump()
+
+  print "--"
+
+  print "DISPOSITION", l.get()
+  l.settle(tag)
+
+  l.unlink()
+  bl.unlink()
+
+  pump()
+
+  s.detach(True)
+  pump()
+  bssn.detach(True)
+  s2.detach(True)
+  a.close()
+  b.close()
+
+  pump()
+
+connection()
+
+def session():
+  from connection import Connection
+  from session import Session
+  from link import link, Sender, Receiver
+
+  a = Connection(None)
+  a.tracing = set(["ops", "err"])
+  a.id = "A"
+  b = Connection(None)
+  b.tracing = set(["err"])
+  b.id = "B"
+  ssn = Session("test", link)
+  a.add(ssn)
+  nss = Session("test", link)
+  b.add(nss)
+
+  def pump():
+    a.tick()
+    b.tick()
+    b.write(a.read())
+    a.write(b.read())
+
+  ssn.attach()
+  nss.attach()
+
+  snd = Sender("L", "S", "T")
+  ssn.add(snd)
+  rcv = Receiver("L", "S", "T")
+  nss.add(rcv)
+
+  snd.link()
+  rcv.link()
+  rcv.flow(10)
+
+  pump()
+
+  from operations import Fragment
+  snd.send(fragments=Fragment(True, True, 0, 0, "m1"))
+  snd.send(fragments=Fragment(True, True, 0, 0, "m2"))
+  dt3 = snd.send(fragments=Fragment(True, True, 0, 0, "m3"))
+
+  pump()
+
+  print rcv.pending()
+
+  rcv.flow(0)
+
+  pump()
+
+  snd.send(fragments=Fragment(True, True, 0, 0, "m4"))
+
+  pump()
+
+  xfrs = []
+  while rcv.pending():
+    x = rcv.get()
+    xfrs.append(x)
+    print "XFR", x
+
+  rcv.ack(xfrs[-1])
+
+  rcv.flow(0)
+
+  pump()
+
+  snd.send(fragments=Fragment(True, True, 0, 0, "m5"))
+
+  pump()
+
+  print nss.exe_deferred
+
+  rcv.ack(xfrs[0])
+
+  rcv.flow(0)
+
+  pump()
+
+  print ssn.acknowledged, ssn.ack_deferred
+
+  snd.settle(dt3)
+
+  print ssn.acknowledged, ssn.ack_deferred
+
+  for dt in list(snd.unsettled):
+    snd.settle(dt)
+
+  snd.unlink()
+  rcv.unlink()
+
+  pump()
+
+  print ssn.acknowledged, ssn.ack_deferred, ssn.on_exe
+
+print "=========="
+session()

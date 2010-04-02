@@ -1,0 +1,144 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+import optparse, socket
+from connection import Connection
+from session import Session, SessionError
+from link import LinkError, Receiver, Sender, link
+from selector import Acceptor, Selector
+from queue import Queue, DESTRUCTIVE
+from util import ConnectionSelectable
+
+class Broker:
+
+  def __init__(self):
+    self.queues = {}
+    self.cursors = {}
+    self.init = {Sender.direction: self.init_sender,
+                 Receiver.direction: self.init_receiver}
+    self.process = {Sender.direction:self.process_sender,
+                    Receiver.direction: self.process_receiver}
+
+  def tick(self, connection):
+    if connection.opening():
+      connection.open()
+
+    for ssn in connection.sessions.values():
+      if ssn.attaching():
+        ssn.attach()
+
+      for link in ssn.links.values():
+        if link.opening():
+          if link.local in self.queues:
+            link.link()
+            self.init[link.direction](link)
+          else:
+            link.local = None
+            link.link()
+            link.unlink()
+            ssn.remove(link)
+            continue
+
+        self.process[link.direction](link)
+
+        if link.closing():
+          link.unlink()
+          ssn.remove(link)
+
+      if ssn.detaching():
+        ssn.detach(True)
+        connection.remove(ssn)
+
+    if connection.closing():
+      connection.close()
+
+    connection.tick()
+
+  def init_sender(self, link):
+    q = self.queues[link.source]
+    cursor = q.cursor(DESTRUCTIVE)
+    self.cursors[link] = cursor, {}
+
+  def init_receiver(self, link):
+    link.flow(10)
+
+  def process_sender(self, link):
+    cursor, unacked = self.cursors[link]
+    while link.capacity() > 0:
+      entry = cursor.get()
+      if entry is None:
+        break
+      elif entry.item is None:
+        continue
+      else:
+        xfr = entry.item
+        print "TRANSFER:", xfr
+        tag = link.send(fragments = xfr.fragments)
+        unacked[tag] = entry
+    while link.pending():
+      t, d = link.get()
+      e = unacked[t]
+      xfr = e.item
+      e.dequeue()
+      print "DEQUEUED:", xfr
+      del unacked[t]
+      link.settle(t)
+
+  def process_receiver(self, link):
+    while link.pending():
+      xfr = link.get()
+      self.queues[link.target].put(xfr)
+      print "ENQUEUED:", xfr
+      link.ack(xfr)
+    if link.capacity() < 10: link.flow(10)
+
+def bind(host, port):
+  sock = socket.socket()
+  sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+  sock.bind((host, port))
+  sock.listen(5)
+  sock.setblocking(0)
+  return sock
+
+parser = optparse.OptionParser(usage="usage: %prog [options] QUEUE_1 ... QUEUE_n",
+                               description="Prototype amqp broker.")
+parser.add_option("-i", "--interface", default="0.0.0.0",
+                  help="interface to listen on (default %default)")
+parser.add_option("-p", "--port", type=int, default=5672,
+                  help="port to listen on (default %default)")
+parser.add_option("-t", "--trace", default="err",
+                  help="enable tracing for specified categories")
+
+opts, args = parser.parse_args()
+
+broker = Broker()
+
+for a in args:
+  broker.queues[a] = Queue()
+
+selector = Selector()
+sock = bind(opts.interface, opts.port)
+
+def handler(accepted):
+  conn = Connection(lambda n: Session(n, link))
+  conn.tracing = set(opts.trace.split())
+  selector.register(ConnectionSelectable(accepted, conn, broker.tick))
+
+selector.register(Acceptor(sock, handler))
+selector.run()

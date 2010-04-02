@@ -2,11 +2,48 @@ This project contains a partial prototype of AMQP 1-0 PR2. This
 currently includes relatively complete components for framing and
 codec.
 
+Getting Started:
+
+  1. First run the broker, passing the names of your queues on the
+     command line:
+
+       ./broker queue-a queue-b queue-c ...
+
+  2. Run the send program to send a message:
+
+       ./send queue-a this is a test
+
+  3. Run the recv program to receive a message:
+
+       ./recv queue-b
+
+  4. Use the --help option for each of the above programs to explore
+     in more depth. All of the above programs support the -t/--trace
+     option which may be used to print a protocol trace:
+
+       ./send -t raw queue-a trace raw bytes
+       ./send -t ops queue-b trace operations before/after encode/decode
+       ./send -t "raw ops err" queue-c trace everything
+
 Files:
+
+  broker         -- A prototype broker: ./broker --help
+
+  recv           -- A client used to receive messages: ./recv --help
+
+  send           -- A client used to send messages: ./send --help
+
+  client.py      -- A simple client library.
 
   codec.py       -- An implementation of the AMQP type system.
 
+  concurrency.py -- Concurrency utilities.
+
+  connection.py  -- An implementation of an AMQP connection endpoint.
+
   framing.py     -- An implementation of the AMQP framing layer.
+
+  link.py        -- An implementation of an AMQP link endpoint.
 
   mllib/         -- An XML parsing library used to load type definitions.
 
@@ -14,6 +51,12 @@ Files:
                     types defined by the AMQP transport specification.
 
   README         -- This file.
+
+  queue.py       -- A simple AMQP queue implementation.
+
+  selector.py    -- A simple I/O driver.
+
+  session.py
 
   test.py        -- Some informal test code.
 

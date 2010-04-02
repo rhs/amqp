@@ -1,0 +1,59 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import optparse, os
+from client import *
+
+parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
+                               description="receive messages")
+parser.add_option("-H", "--host",
+                  help="host to connect to (default 0.0.0.0)")
+parser.add_option("-p", "--port", type=int, default=5672,
+                  help="port to connect to (default %default)")
+parser.add_option("-c", "--count", type=int, default=1,
+                  help="number of messages to send (default %default)")
+parser.add_option("-t", "--trace", default="err",
+                  help="enable tracing for specified categories")
+
+opts, args = parser.parse_args()
+
+if not args:
+  parser.error("address is required")
+
+addr = args[0]
+
+host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
+conn = Connection()
+conn.connect(host, opts.port)
+conn.open()
+ssn = conn.session()
+lnk = ssn.receiver(addr, limit=opts.count)
+
+while lnk.pending():
+  xfr = lnk.get()
+  print "".join([f.payload for f in xfr.fragments])
+  lnk.ack(xfr)
+
+lnk.close()
+ssn.close()
+conn.close()
+
+if lnk.unsettled:
+  print lnk.unsettled
