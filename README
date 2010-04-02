@@ -1,6 +1,7 @@
 This project contains a partial prototype of AMQP 1-0 PR2. This
-currently includes relatively complete components for framing and
-codec.
+currently includes relatively complete components for framing, codec,
+connection, session, and link endpoints, as well as a very simple
+broker, client library, and send/recv utilities.
 
 Getting Started:
 
