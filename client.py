@@ -29,6 +29,9 @@ from threading import RLock
 from uuid import uuid4
 from operations import Fragment
 
+class Timeout(Exception):
+  pass
+
 class Connection(BaseConnection):
 
   def __init__(self):
@@ -51,7 +54,8 @@ class Connection(BaseConnection):
 
   def wait(self, predicate, timeout=10):
     self.selector.wakeup()
-    self.waiter.wait(predicate, timeout)
+    if not self.waiter.wait(predicate, timeout):
+      raise Timeout()
 
   def session(self, name = None):
     if name is None:
@@ -134,3 +138,9 @@ class Receiver(BaseReceiver, Link):
   def __init__(self, connection, source):
     BaseReceiver.__init__(self, str(uuid4()), source, None)
     Link.__init__(self, connection)
+
+  @synchronized
+  def pending(self, block=False, timeout=None):
+    if block and self.capacity():
+      self.wait(lambda: BaseReceiver.pending(self), timeout)
+    return BaseReceiver.pending(self)

@@ -27,6 +27,8 @@ parser.add_option("-H", "--host",
                   help="host to connect to (default 0.0.0.0)")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to connect to (default %default)")
+parser.add_option("-b", "--block", action="store_true",
+                  help="block until messages arrive")
 parser.add_option("-c", "--count", type=int, default=1,
                   help="number of messages to send (default %default)")
 parser.add_option("-t", "--trace", default="err",
@@ -46,7 +48,7 @@ conn.open()
 ssn = conn.session()
 lnk = ssn.receiver(addr, limit=opts.count)
 
-while lnk.pending():
+while lnk.pending(block=opts.block):
   xfr = lnk.get()
   print "".join([f.payload for f in xfr.fragments])
   lnk.ack(xfr)
