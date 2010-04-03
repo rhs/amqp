@@ -61,6 +61,8 @@ Files:
 
   test.py        -- Some informal test code.
 
+  TODO           -- List of outstanding tasks.
+
   transport.xml  -- Definitions from the AMQP transport specification.
 
   types.xml      -- Definitions from the AMQP types specification. This
