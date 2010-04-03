@@ -19,6 +19,20 @@
 
 import os, mllib, traceback
 
+__SELF__ = object()
+
+class Constant:
+
+  def __init__(self, name, value=__SELF__):
+    self.name = name
+    if value is __SELF__:
+      self.value = self
+    else:
+      self.value = value
+
+  def __repr__(self):
+    return self.name
+
 class InsufficientCapacity(Exception): pass
 
 class Buffer:

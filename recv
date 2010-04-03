@@ -43,6 +43,7 @@ addr = args[0]
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection()
+conn.tracing = set(opts.trace.split())
 conn.connect(host, opts.port)
 conn.open()
 ssn = conn.session()

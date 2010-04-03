@@ -18,12 +18,13 @@
 #
 
 from operations import Flow, Link as LinkCmd, Unlink, Transfer, Disposition
+from util import Constant
 from uuid import uuid4
 
 class LinkError(Exception):
   pass
 
-PENDING = object()
+PENDING = Constant("PENDING")
 
 class Link(object):
 
