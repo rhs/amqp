@@ -20,7 +20,7 @@
 import inspect, mllib, os, struct
 from operations import *
 
-from framing import CONN_FRAME, FrameDecoder, FrameEncoder, SSN_FRAME
+from framing import CONN_FRAME, FrameDecoder, FrameEncoder
 from codec import TypeDecoder, TypeEncoder
 from util import Buffer, parse
 from uuid import uuid4
@@ -93,20 +93,16 @@ class Connection:
       self.process_frame(f)
 
   def process_frame(self, f):
-    op, _ = self.type_decoder.decode(f.payload)
-    op.channel = f.channel
-    if f.type == SSN_FRAME:
-      op.executed = f.executed
-      op.acknowledged = f.acknowledged
-      op.command_id = f.command_id
-      op.capacity = f.capacity
-
+    if f.payload:
+      op, _ = self.type_decoder.decode(f.payload)
+    else:
+      op = Empty()
+    op.init(f)
     self.trace("ops", "RECV: %s", op)
     getattr(self, "do_%s" % op.NAME, self.unhandled)(op)
 
   def unhandled(self, op):
     ssn = self.channels[op.channel]
-    assert op.COMMAND
     ssn.write(op)
 
   def read(self, n=None):

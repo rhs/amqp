@@ -199,8 +199,6 @@ def session():
 
   print rcv.pending()
 
-  rcv.flow(0)
-
   pump()
 
   snd.send(fragments=Fragment(True, True, 0, 0, "m4"))
@@ -215,8 +213,6 @@ def session():
 
   rcv.ack(xfrs[-1])
 
-  rcv.flow(0)
-
   pump()
 
   snd.send(fragments=Fragment(True, True, 0, 0, "m5"))
@@ -225,11 +221,24 @@ def session():
 
   print nss.exe_deferred
 
+  print nss.executed
   rcv.ack(xfrs[0])
+  print nss.executed
+  print nss.syncpoint
 
-  rcv.flow(0)
+  print "----------"
+  pump()
+  print "----------"
+
+  print nss.executed
+  for xfr in xfrs[1:-1]:
+    rcv.ack(xfr)
+  print nss.executed, nss.exe_deferred
+  print rcv.pending()
+  rcv.ack(rcv.get())
 
   pump()
+  print "----------"
 
   print ssn.acknowledged, ssn.ack_deferred
 

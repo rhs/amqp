@@ -19,7 +19,7 @@
 
 import inspect
 
-from framing import ConnectionFrame, SessionFrame
+from framing import ConnectionFrame, SessionFrame, SSN_FRAME
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
@@ -67,6 +67,16 @@ class Compound(object):
 class Operation(Compound):
   FIELDS = [Field("channel", 0)]
 
+  def init(self, frame):
+    self.channel = frame.channel
+    if frame.type == SSN_FRAME:
+      if frame.flags & 0x4:
+        self.sync = True
+      self.executed = frame.executed
+      self.acknowledged = frame.acknowledged
+      self.command_id = frame.command_id
+      self.capacity = frame.capacity
+
 class ConnectionOp(Operation):
 
   def frame(self, enc):
@@ -98,6 +108,18 @@ class SessionOp(Operation):
                         self.capacity or 0,
                         self.command_id or 0,
                         enc.encode(self))
+
+class EmptyEncoder:
+
+  def encode(self, obj):
+    return ""
+
+EMPTY_ENC = EmptyEncoder()
+
+class Empty(SessionOp):
+  NAME="empty"
+  def frame(self, enc):
+    return SessionOp.frame(self, EMPTY_ENC)
 
 class Command(SessionOp):
   COMMAND = True
@@ -139,7 +161,7 @@ COMPOUND = \
     load_compound(TRANSPORT["amqp/section", named("commands")], Command) + \
     load_compound(TRANSPORT["amqp/section", named("definitions")], Compound)
 
-__all__ = ["COMPOUND"]
+__all__ = ["COMPOUND", "Empty"]
 
 for cls in COMPOUND:
   globals()[cls.__name__] = cls

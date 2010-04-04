@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from operations import Attach, Detach
+from operations import Attach, Detach, Empty
 
 class SessionError(Exception):
   pass
@@ -52,6 +52,8 @@ class Session:
     self.received = None
     self.executed = None
     self.capacity = 1024
+    self.syncpoint = None
+    self.syncedto = None
     # track commands we've executed but can't report yet
     self.exe_deferred = set()
     # command-id -> action to take when command is 'acknowledged'
@@ -77,7 +79,23 @@ class Session:
     result = self.dispatch(op)
     if op.COMMAND and result:
       self.on_ack[op.command_id] = result
+    if op.sync:
+      if op.COMMAND:
+        self.syncpoint = op.command_id
+      else:
+        # XXX: is this supposed to be correlated?
+        self.flush()
     self.tick()
+
+  def flush(self):
+    self.write_op(Empty())
+
+  def do_sync(self):
+    if self.syncpoint is None or self.syncpoint > self.executed:
+      return
+    if self.syncedto < self.syncpoint:
+      self.flush()
+      self.syncpoint = None
 
   def do_exe(self, executed):
     idx = self.acknowledged
@@ -85,7 +103,10 @@ class Session:
       cmd = self.outgoing[idx - self.acknowledged]
       assert cmd.command_id <= executed
       if cmd.command_id in self.on_exe:
+        pre = self.acknowledged
         self.on_exe.pop(cmd.command_id)(cmd)
+        post = self.acknowledged
+        idx += post - pre
       idx += 1
 
   def do_ack(self, acknowledged):
@@ -120,6 +141,7 @@ class Session:
 
   # XXX: dup of read in framing
   def read(self, n=None):
+    self.do_sync()
     result = self.output[:n]
     del self.output[:n]
     return result
@@ -139,8 +161,11 @@ class Session:
     op.capacity = self.capacity
     op.command_id = self.command_id
     self.output.append(op)
+    self.syncedto = self.executed
 
   def write_cmd(self, cmd, action=None):
+    if action:
+      cmd.sync = True
     self.outgoing.append(cmd)
     self.write_op(cmd)
     self.on_exe[cmd.command_id] = action or self.actioned
@@ -191,6 +216,9 @@ class Session:
       raise SessionError("double detach")
     else:
       self.detaches_rcvd += 1
+
+  def do_empty(self, op):
+    pass
 
   def do_link(self, link_cmd):
     if self.links.has_key(link_cmd.name):
