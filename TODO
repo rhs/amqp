@@ -2,3 +2,4 @@
    properly.
  - Support multiple distribution modes.
  - Fairness between competing consumers.
+ - Message abstraction.
