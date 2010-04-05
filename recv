@@ -18,7 +18,7 @@
 # under the License.
 #
 
-import optparse, os
+import optparse, os, sys
 from client import *
 
 parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
@@ -59,6 +59,7 @@ while lnk.pending(block=True):
   xfr = lnk.get()
   count += 1
   print "".join([f.payload for f in xfr.fragments])
+  sys.stdout.flush()
   lnk.ack(xfr)
   if lnk.capacity() == 0:
     if opts.count == 0:

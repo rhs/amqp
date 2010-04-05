@@ -29,6 +29,8 @@ parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to connect to (default %default)")
 parser.add_option("-c", "--count", type=int, default=1,
                   help="number of messages to send (default %default)")
+parser.add_option("-i", "--stdin", action="store_true",
+                  help="read messages from stdin (one message per line)")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
 
@@ -38,7 +40,6 @@ if not args:
   parser.error("address is required")
 
 addr = args[0]
-content = " ".join(args[1:])
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection()
@@ -48,8 +49,18 @@ conn.open()
 ssn = conn.session()
 lnk = ssn.sender(addr)
 
-for i in range(opts.count):
+count = 0
+while opts.count == 0 or count < opts.count:
+  if opts.stdin:
+    try:
+      content = raw_input()
+    except EOFError:
+      break
+  else:
+    content = " ".join(args[1:])
+
   lnk.settle(lnk.send(fragments=[Fragment(True, True, 0, 0, content)]))
+  count += 1
 
 lnk.close()
 ssn.close()
