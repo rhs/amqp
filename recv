@@ -55,20 +55,23 @@ lnk = ssn.receiver(addr, limit=credit)
 if not opts.block: lnk.drain()
 
 count = 0
-while lnk.pending(block=True):
-  xfr = lnk.get()
-  count += 1
-  print "".join([f.payload for f in xfr.fragments])
-  sys.stdout.flush()
-  lnk.ack(xfr)
-  if lnk.capacity() == 0:
-    if opts.count == 0:
-      credit = 10
-    else:
-      credit = min(10, opts.count - (count + lnk.pending()))
-    if credit:
-      lnk.flow(credit)
-      if not opts.block: lnk.drain()
+try:
+  while lnk.pending(block=True):
+    xfr = lnk.get()
+    count += 1
+    print "".join([f.payload for f in xfr.fragments])
+    sys.stdout.flush()
+    lnk.ack(xfr)
+    if lnk.capacity() == 0:
+      if opts.count == 0:
+        credit = 10
+      else:
+        credit = min(10, opts.count - (count + lnk.pending()))
+      if credit:
+        lnk.flow(credit)
+        if not opts.block: lnk.drain()
+except KeyboardInterrupt:
+  pass
 
 lnk.close()
 ssn.close()

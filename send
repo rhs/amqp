@@ -50,17 +50,20 @@ ssn = conn.session()
 lnk = ssn.sender(addr)
 
 count = 0
-while opts.count == 0 or count < opts.count:
-  if opts.stdin:
-    try:
-      content = raw_input()
-    except EOFError:
-      break
-  else:
-    content = " ".join(args[1:])
+try:
+  while opts.count == 0 or count < opts.count:
+    if opts.stdin:
+      try:
+        content = raw_input()
+      except EOFError:
+        break
+    else:
+      content = " ".join(args[1:])
 
-  lnk.settle(lnk.send(fragments=[Fragment(True, True, 0, 0, content)]))
-  count += 1
+    lnk.settle(lnk.send(fragments=[Fragment(True, True, 0, 0, content)]))
+    count += 1
+except KeyboardInterrupt:
+  pass
 
 lnk.close()
 ssn.close()

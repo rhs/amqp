@@ -128,18 +128,21 @@ parser.add_option("-t", "--trace", default="err",
 
 opts, args = parser.parse_args()
 
-broker = Broker()
+try:
+  broker = Broker()
 
-for a in args:
-  broker.queues[a] = Queue()
+  for a in args:
+    broker.queues[a] = Queue()
 
-selector = Selector()
-sock = bind(opts.interface, opts.port)
+  selector = Selector()
+  sock = bind(opts.interface, opts.port)
 
-def handler(accepted):
-  conn = Connection(lambda n: Session(n, link))
-  conn.tracing = set(opts.trace.split())
-  selector.register(ConnectionSelectable(accepted, conn, broker.tick))
+  def handler(accepted):
+    conn = Connection(lambda n: Session(n, link))
+    conn.tracing = set(opts.trace.split())
+    selector.register(ConnectionSelectable(accepted, conn, broker.tick))
 
-selector.register(Acceptor(sock, handler))
-selector.run()
+  selector.register(Acceptor(sock, handler))
+  selector.run()
+except KeyboardInterrupt:
+  pass
