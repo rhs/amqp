@@ -16,7 +16,7 @@ Getting Started:
 
   3. Run the recv program to receive a message:
 
-       ./recv queue-b
+       ./recv queue-a
 
   4. Use the --help option for each of the above programs to explore
      in more depth. All of the above programs support the -t/--trace
