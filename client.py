@@ -141,6 +141,7 @@ class Receiver(BaseReceiver, Link):
 
   @synchronized
   def pending(self, block=False, timeout=None):
-    if block and self.capacity():
-      self.wait(lambda: BaseReceiver.pending(self), timeout)
+    if block:
+      self.wait(lambda: self.capacity() == 0 or BaseReceiver.pending(self) > 0,
+                timeout)
     return BaseReceiver.pending(self)

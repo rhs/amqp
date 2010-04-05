@@ -17,7 +17,8 @@
 # under the License.
 #
 
-from operations import Flow, Link as LinkCmd, Unlink, Transfer, Disposition
+from operations import Drain, Flow, Link as LinkCmd, Unlink, Transfer, \
+    Disposition
 from util import Constant
 from uuid import uuid4
 
@@ -116,6 +117,7 @@ class Sender(Link):
 
   def init(self):
     self.outgoing = []
+    self.drains = []
 
   def get_local(self):
     return self.source
@@ -134,8 +136,27 @@ class Sender(Link):
   remote = property(fget=get_remote, fset=set_remote)
 
   def do_flow(self, flow):
-    self.limit = flow.limit
+    if self.drains:
+      self.drains[-1][-1] = flow.limit
+    else:
+      self.limit = flow.limit
     self.done(flow)
+
+  def do_drain(self, drain):
+    self.drains.append([drain, None])
+    if self.limit == self.count:
+      self.drain_done()
+
+  def empty(self):
+    if self.drains:
+      self.limit = self.count
+      self.drain_done()
+
+  def drain_done(self):
+    drain, limit = self.drains.pop()
+    self.done(drain)
+    if limit is not None:
+      self.limit = limit
 
   def send(self, **kwargs):
     if self.count >= self.limit:
@@ -147,6 +168,8 @@ class Sender(Link):
     self.write_cmd(xfr, self.transferred)
     self.outgoing.append(xfr)
     self.unsettled[xfr.delivery_tag] = PENDING
+    if self.drains and self.limit == self.count:
+      self.drain_done()
     return xfr.delivery_tag
 
   def transferred(self, xfr):
@@ -224,6 +247,12 @@ class Receiver(Link):
   def flow(self, n):
     self.limit += n
     self.write_cmd(Flow(limit=self.limit))
+
+  def drain(self):
+    self.write_cmd(Drain(), self.drained)
+
+  def drained(self, drain):
+    self.limit = self.count
 
   def pending(self):
     return len(self.incoming)

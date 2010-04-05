@@ -83,6 +83,7 @@ class Broker:
     while link.capacity() > 0:
       entry = cursor.get()
       if entry is None:
+        link.empty()
         break
       elif entry.item is None:
         continue

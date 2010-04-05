@@ -106,8 +106,9 @@ class Session:
         pre = self.acknowledged
         self.on_exe.pop(cmd.command_id)(cmd)
         post = self.acknowledged
-        idx += post - pre
-      idx += 1
+        idx += max(1, post - pre)
+      else:
+        idx += 1
 
   def do_ack(self, acknowledged):
     while self.ack_actioned < acknowledged:

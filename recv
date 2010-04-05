@@ -47,12 +47,27 @@ conn.tracing = set(opts.trace.split())
 conn.connect(host, opts.port)
 conn.open()
 ssn = conn.session()
-lnk = ssn.receiver(addr, limit=opts.count)
+if opts.count:
+  credit = min(10, opts.count)
+else:
+  credit = 10
+lnk = ssn.receiver(addr, limit=credit)
+if not opts.block: lnk.drain()
 
-while lnk.pending(block=opts.block):
+count = 0
+while lnk.pending(block=True):
   xfr = lnk.get()
+  count += 1
   print "".join([f.payload for f in xfr.fragments])
   lnk.ack(xfr)
+  if lnk.capacity() == 0:
+    if opts.count == 0:
+      credit = 10
+    else:
+      credit = min(10, opts.count - (count + lnk.pending()))
+    if credit:
+      lnk.flow(credit)
+      if not opts.block: lnk.drain()
 
 lnk.close()
 ssn.close()
