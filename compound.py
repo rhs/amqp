@@ -18,8 +18,6 @@
 #
 
 import inspect
-
-from framing import ConnectionFrame, SessionFrame, SSN_FRAME
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
@@ -64,71 +62,15 @@ class Compound(object):
   def __repr__(self):
     return "%s(%s)" % (self.__class__.__name__, ", ".join(self._args()))
 
-class Operation(Compound):
-  FIELDS = [Field("channel", 0)]
-
-  def init(self, frame):
-    self.channel = frame.channel
-    if frame.type == SSN_FRAME:
-      if frame.flags & 0x4:
-        self.sync = True
-      self.executed = frame.executed
-      self.acknowledged = frame.acknowledged
-      self.command_id = frame.command_id
-      self.capacity = frame.capacity
-
-class ConnectionOp(Operation):
-
-  def frame(self, enc):
-    return ConnectionFrame(0, self.channel, enc.encode(self))
-
-class SessionOp(Operation):
-  FIELDS = [Field("acknowledged"),
-            Field("executed"),
-            Field("capacity"),
-            Field("command_id"),
-            Field("sync")]
-
-  COMMAND = False
-
-  def frame(self, enc):
-    flags = 0
-    # XXX: hardcoded flags
-    if self.COMMAND:
-      flags |= 0x1
-    if self.executed is None:
-      flags |= 0x2
-    if self.sync:
-      flags |= 0x4
-    # XXX: default these all to zero until I build the machinery to
-    # set/use them properly
-    return SessionFrame(flags, self.channel,
-                        self.acknowledged or 0,
-                        self.executed or 0,
-                        self.capacity or 0,
-                        self.command_id or 0,
-                        enc.encode(self))
-
-class EmptyEncoder:
-
-  def encode(self, obj):
-    return ""
-
-EMPTY_ENC = EmptyEncoder()
-
-class Empty(SessionOp):
-  NAME="empty"
-  def frame(self, enc):
-    return SessionOp.frame(self, EMPTY_ENC)
-
-class Command(SessionOp):
-  COMMAND = True
-
-def load_compound(sections, *default_bases, **kwargs):
+def load_compound(types, *default_bases, **kwargs):
   result = []
-  for nd in sections.query["type", lambda n: n["@class"] == "compound"]:
+  for nd in types:
+    archetype = pythonize(nd["@provides"])
     cls_name = pythonize(nd["@name"], camel=True)
-    bases = kwargs.get(cls_name, default_bases)
+    if cls_name in kwargs:
+      bases = kwargs[cls_name]
+    else:
+      bases = kwargs.get(archetype, default_bases)
     if inspect.isclass(bases):
       bases = (bases,)
 
@@ -148,21 +90,3 @@ def load_compound(sections, *default_bases, **kwargs):
     dict["FIELDS"] = fields
     result.append(type(cls_name, bases, dict))
   return result
-
-TRANSPORT = load_xml("transport.xml")
-def named(name):
-  return lambda nd: nd["@name"] == name
-COMPOUND = \
-    load_compound(TRANSPORT["amqp/section", named("controls")], Operation,
-                  Open=ConnectionOp,
-                  Attach=SessionOp,
-                  Detach=SessionOp,
-                  Close=ConnectionOp) + \
-    load_compound(TRANSPORT["amqp/section", named("commands")], Command) + \
-    load_compound(TRANSPORT["amqp/section", named("definitions")], Compound)
-
-__all__ = ["COMPOUND", "Empty"]
-
-for cls in COMPOUND:
-  globals()[cls.__name__] = cls
-  __all__.append(cls.__name__)

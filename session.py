@@ -17,7 +17,10 @@
 # under the License.
 #
 
-from operations import Attach, Detach, Empty
+from link import ATTACHED, DETACHED, Sender, Receiver
+from protocol import Begin, Attach, Flow, Transfer, Disposition, Extent, \
+    Detach, End
+from util import RangeSet
 
 class SessionError(Exception):
   pass
@@ -27,225 +30,250 @@ class Session:
   def __init__(self, name, factory):
     self.name = name
     self.factory = factory
+    self.remote_channel = None
     self.channel = None
-    self.opening = True
-    self.timeout = 0
 
-    self.attaches_sent = 0
-    self.attaches_rcvd = 0
-    self.detaches_sent = 0
-    self.detaches_rcvd = 0
+    self.begin_sent = False
+    self.begin_rcvd = False
+    self.end_sent = False
+    self.end_rcvd = False
 
-    # XXX: this makes for some confusing terminology
+    self.incoming = Incoming()
+    self.outgoing = Outgoing()
+    self.directions = {}
+    self.directions[Sender.direction] = self.outgoing
+    self.directions[Receiver.direction] = self.incoming
 
-    # sender state (from spec)
-    self.outgoing = []
-    self.command_id = 1
-    self.acknowledged = 0
-    self.command_limit = None
-    # track commands we've 'acknowledged' but can't report yet
-    self.ack_deferred = set()
-    # command-id -> action to take when command is executed
-    self.on_exe = {}
-
-    # receiver state (from spec)
-    self.received = None
-    self.executed = None
-    self.capacity = 1024
-    self.syncpoint = None
-    self.syncedto = None
-    # track commands we've executed but can't report yet
-    self.exe_deferred = set()
-    # command-id -> action to take when command is 'acknowledged'
-    self.on_ack = {}
-    self.ack_actioned = 0
-
-    # link name -> link end
+    # link name -> link endpoint
     self.links = {}
-    # handle -> link end
+    # handle -> link endpoint
     self.handles = {}
 
     self.output = []
 
   def write(self, op):
-    if op.executed is None:
-      self.command_limit = self.command_id + op.capacity
-    else:
-      self.command_limit = op.executed + op.capacity
-      self.do_exe(op.executed)
-    self.do_ack(op.acknowledged)
-    if op.COMMAND:
-      self.received = op.command_id
-    result = self.dispatch(op)
-    if op.COMMAND and result:
-      self.on_ack[op.command_id] = result
-    if op.sync:
-      if op.COMMAND:
-        self.syncpoint = op.command_id
-      else:
-        # XXX: is this supposed to be correlated?
-        self.flush()
-    self.tick()
-
-  def flush(self):
-    self.write_op(Empty())
-
-  def do_sync(self):
-    if self.syncpoint is None or self.syncpoint > self.executed:
-      return
-    if self.syncedto < self.syncpoint:
-      self.flush()
-      self.syncpoint = None
-
-  def do_exe(self, executed):
-    idx = self.acknowledged
-    while idx < executed:
-      cmd = self.outgoing[idx - self.acknowledged]
-      assert cmd.command_id <= executed
-      if cmd.command_id in self.on_exe:
-        pre = self.acknowledged
-        self.on_exe.pop(cmd.command_id)(cmd)
-        post = self.acknowledged
-        idx += max(1, post - pre)
-      else:
-        idx += 1
-
-  def do_ack(self, acknowledged):
-    while self.ack_actioned < acknowledged:
-      next = self.ack_actioned + 1
-      if next in self.on_ack:
-        self.on_ack.pop(next)(next)
-      self.ack_actioned = next
-
-  def tick(self):
-    pass
-
-  def done(self, cmd):
-    if cmd.command_id <= self.executed:
-      return
-
-    self.exe_deferred.add(cmd.command_id)
-    while (self.executed + 1) in self.exe_deferred:
-      self.executed += 1
-      self.exe_deferred.discard(self.executed)
-
-  def actioned(self, cmd):
-    if cmd.command_id <= self.acknowledged:
-      return
-
-    self.ack_deferred.add(cmd.command_id)
-    self.on_exe.pop(cmd.command_id, None)
-    while (self.acknowledged + 1) in self.ack_deferred:
-      self.acknowledged += 1
-      self.outgoing.pop(0)
-      self.ack_deferred.discard(self.acknowledged)
+    self.dispatch(op)
 
   # XXX: dup of read in framing
   def read(self, n=None):
-    self.do_sync()
     result = self.output[:n]
     del self.output[:n]
     return result
 
   def dispatch(self, op):
-    return getattr(self, "do_%s" % op.NAME, self.unhandled)(op)
+    getattr(self, "do_%s" % op.NAME)(op)
 
-  def unhandled(self, cmd):
-    link = self.handles[cmd.handle]
-    return link.write(cmd)
-
-  def write_op(self, op):
-    if not isinstance(op, Attach):
-      assert self.attaches_sent > self.detaches_sent
-    op.acknowledged = self.acknowledged
-    op.executed = self.executed
-    op.capacity = self.capacity
-    op.command_id = self.command_id
+  def post_frame(self, op):
+    assert self.begin_sent and not self.end_sent
     self.output.append(op)
-    self.syncedto = self.executed
 
-  def write_cmd(self, cmd, action=None):
-    if action:
-      cmd.sync = True
-    self.outgoing.append(cmd)
-    self.write_op(cmd)
-    self.on_exe[cmd.command_id] = action or self.actioned
-    self.command_id += 1
+  def beginning(self):
+    return self.begin_rcvd and not self.begin_sent
 
-  def attaching(self):
-    return self.attaches_rcvd > self.attaches_sent
+  def ending(self):
+    return self.end_rcvd and not self.end_sent
 
-  def detaching(self):
-    return self.detaches_rcvd > self.detaches_sent
+  def begin(self):
+    if self.begin_sent:
+      raise SessionError("already begun")
+    self.begin_sent = True
+    self.post_frame(Begin(remote_channel = self.remote_channel,
+                          name = self.name))
 
-  def attach(self):
-    if self.attaches_sent > self.detaches_sent:
-      raise SessionError("double attach")
-    self.write_op(Attach(name = self.name,
-                         opening = self.opening,
-                         timeout = self.timeout,
-                         received = self.received,
-                         acknowledged = self.acknowledged,
-                         executed = self.executed,
-                         capacity = self.capacity,
-                         command_id = self.command_id))
-    self.attaches_sent += 1
+  def do_begin(self, begin):
+    self.begin_rcvd = True
 
-  def do_attach(self, att):
-    if self.attaches_rcvd > self.detaches_rcvd:
-      raise SessionError("double attach")
-    else:
-      self.attaches_rcvd += 1
-
-      if att.opening:
-        self.executed = att.command_id - 1
-
-  def detach(self, closing, exception=None):
-    if self.detaches_sent > self.attaches_sent:
-      raise SessionError("double detach")
-    # process any outstanding work before detaching
+  def end(self, error=None):
+    if self.end_sent:
+      raise SessionError("already ended")
+    # process any outstanding work before ending
     self.tick()
-    self.write_op(Detach(name = self.name,
-                         closing = closing,
-                         acknowledged = self.acknowledged,
-                         executed = self.executed,
-                         exception = exception))
-    self.detaches_sent += 1
+    self.post_frame(End())
+    self.end_sent = True
 
-  def do_detach(self, det):
-    if self.detaches_rcvd > self.attaches_rcvd:
-      raise SessionError("double detach")
-    else:
-      self.detaches_rcvd += 1
-
-  def do_empty(self, op):
-    pass
-
-  def do_link(self, link_cmd):
-    if self.links.has_key(link_cmd.name):
-      link = self.links[link_cmd.name]
-    else:
-      link = self.factory(link_cmd)
-      self.add(link)
-
-    self.handles[link_cmd.handle] = link
-    self.done(link_cmd)
-    link.write(link_cmd)
-
-  def do_unlink(self, unlink):
-    link = self.handles.pop(unlink.handle)
-    self.done(unlink)
-    link.write(unlink)
+  def do_end(self, det):
+    self.end_rcvd = True
 
   def add(self, link):
     link.session = self
-    link.handle = self.allocate_handle()
     self.links[link.name] = link
 
   def allocate_handle(self):
     return max([-1] + [l.handle for l in self.links.values()]) + 1
 
   def remove(self, link):
+    # process any outstanding work before removing
+    self.tick()
     link.session = None
     link.handle = None
     del self.links[link.name]
+
+  def do_attach(self, attach):
+    if attach.handle in self.handles:
+      raise SessionError("double attach")
+
+    if self.links.has_key(attach.name):
+      link = self.links[attach.name]
+    else:
+      link = self.factory(attach)
+      self.add(link)
+
+    self.handles[attach.handle] = link
+    link.write(attach)
+
+  def do_flow(self, flow):
+    link = self.handles[flow.handle]
+    link.do_flow(flow.flow_state)
+
+  def do_transfer(self, xfr):
+    link = self.handles[xfr.handle]
+    self.incoming.append(link, xfr)
+    link.write(xfr)
+
+  def do_disposition(self, disp):
+    if disp.extents:
+      # XXX
+      direction = self.directions[1 - disp.direction]
+      for e in disp.extents:
+        start = max(direction.unsettled_lwm, e.first)
+        for id in range(start, e.last+1):
+          delivery = direction.get_delivery(id)
+          if delivery:
+            link, tag = delivery
+            link.do_disposition(tag, e.state, e.settled)
+
+  def do_detach(self, detach):
+    if detach.handle not in self.handles:
+      raise SessionError("double detach")
+
+    link = self.handles.pop(detach.handle)
+    link.write(detach)
+
+  def tick(self):
+    for link in self.links.values():
+      if (link.modified or link.local_state is ATTACHED) and link.handle is None:
+        link.handle = self.allocate_handle()
+        self.post_frame(Attach(name = link.name,
+                               handle = link.handle,
+                               flow_state = link.flow_state(),
+                               direction = link.direction,
+                               local = link.local,
+                               remote = link.remote))
+        link.modified = False
+
+      if link.handle is not None:
+        self.process_link(link)
+
+        if link.local_state is DETACHED:
+          self.post_frame(Detach(handle=link.handle))
+          link.handle = None
+
+  def process_link(self, l):
+    # XXX
+    if l.direction == Sender.direction:
+      while l.outgoing:
+        xfr = l.outgoing.pop(0)
+        xfr.handle = l.handle
+        self.outgoing.append(l, xfr)
+        self.post_frame(xfr)
+
+    if l.modified:
+      self.post_frame(Flow(handle=l.handle, flow_state=l.flow_state()))
+      l.modified = False
+
+    states = {}
+
+    for dtag, local in l.get_local(modified=True):
+      direction = self.directions[l.direction]
+      ids = direction.transfers[(l, dtag)]
+      if local in states:
+        ranges = states[local]
+      else:
+        ranges = RangeSet()
+        states[local] = ranges
+      for r in ids:
+        ranges.add_range(r)
+
+      if local.settled:
+        direction.settle(l, dtag)
+        l.unsettled.pop(dtag)
+      local.modified = False
+
+    for local, ranges in states.items():
+      extents = []
+      for r in ranges:
+        ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
+        extents.append(ext)
+      self.post_frame(Disposition(direction=l.direction, extents=extents))
+
+class DeliveryMap:
+
+  def __init__(self):
+    # (link, delivery_tag) -> ranges
+    self.transfers = {}
+    # transfer_id -> (link, delivery_tag)
+    self.deliveries = []
+    # lowest unsettled transfer_id
+    self.unsettled_lwm = None
+    # highest unsettled transfer_id
+    self.unsettled_hwm = None
+    self.capacity = None
+    self.init()
+
+  def append(self, link, transfer):
+    delivery = (link, transfer.delivery_tag)
+    self.mark(transfer)
+    id = transfer.transfer_id
+    if delivery in self.transfers:
+      ranges = self.transfers[delivery]
+    else:
+      ranges = RangeSet()
+      self.transfers[delivery] = ranges
+    ranges.add(id)
+    self.deliveries.append(delivery)
+
+  def settle(self, link, delivery_tag):
+    delivery = (link, delivery_tag)
+    ranges = self.transfers.pop(delivery)
+    for r in ranges:
+      for id in r:
+        idx = id - self.unsettled_lwm
+        assert self.deliveries[idx] == delivery
+        self.deliveries[idx] = None
+
+    while self.deliveries:
+      if self.deliveries[0] is None:
+        self.deliveries.pop(0)
+        self.unsettled_lwm += 1
+      else:
+        break
+
+  def get_delivery(self, transfer_id):
+    return self.deliveries[transfer_id - self.unsettled_lwm]
+
+  def __repr__(self):
+    return "%s(%r, %r, %s, %s)" % (self.__class__, self.transfers, self.deliveries,
+                                   self.unsettled_lwm, self.unsettled_hwm)
+
+class Incoming(DeliveryMap):
+
+  def init(self):
+    pass
+
+  def mark(self, transfer):
+    if self.unsettled_lwm is None:
+      self.unsettled_lwm = transfer.transfer_id
+    else:
+      assert transfer.transfer_id == self.unsettled_hwm + 1
+    self.unsettled_hwm = transfer.transfer_id
+
+class Outgoing(DeliveryMap):
+
+  def init(self):
+    self.unsettled_lwm = 1
+    self.unsettled_hwm = 0
+
+  def mark(self, transfer):
+    assert transfer.transfer_id is None
+    self.unsettled_hwm += 1
+    transfer.transfer_id = self.unsettled_hwm

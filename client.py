@@ -27,7 +27,7 @@ from util import ConnectionSelectable
 from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
-from operations import Fragment
+from protocol import Fragment, Linkage
 
 class Timeout(Exception):
   pass
@@ -62,7 +62,7 @@ class Connection(BaseConnection):
       name = str(uuid4())
     ssn = Session(self, name)
     self.add(ssn)
-    ssn.attach()
+    ssn.begin()
     return ssn
 
   @synchronized
@@ -84,29 +84,29 @@ class Session(BaseSession):
   def sender(self, target):
     snd = Sender(self.connection, target)
     self.add(snd)
-    snd.link()
-    self.wait(lambda: snd.opened())
-    if snd.target is None:
+    snd.attach()
+    self.wait(lambda: snd.opened() or snd.closing())
+    if snd.remote is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
     return snd
 
   @synchronized
-  def receiver(self, source, limit=0):
+  def receiver(self, source, limit=0, drain=False):
     rcv = Receiver(self.connection, source)
     self.add(rcv)
-    rcv.link()
+    rcv.attach()
     if limit:
-      rcv.flow(limit)
-    self.wait(lambda: rcv.opened())
-    if rcv.source is None:
+      rcv.flow(limit, drain=drain)
+    self.wait(lambda: rcv.opened() or rcv.closing())
+    if rcv.remote is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     return rcv
 
   @synchronized
   def close(self):
-    self.detach(True)
+    self.end()
 
 class Link:
 
@@ -119,13 +119,13 @@ class Link:
 
   @synchronized
   def close(self):
-    self.unlink()
-    self.wait(lambda: self.closed())
+    self.detach()
+    self.wait(self.closed)
 
 class Sender(BaseSender, Link):
 
   def __init__(self, connection, target):
-    BaseSender.__init__(self, str(uuid4()), None, target)
+    BaseSender.__init__(self, str(uuid4()), Linkage(None, target))
     Link.__init__(self, connection)
 
   @synchronized
@@ -136,12 +136,23 @@ class Sender(BaseSender, Link):
 class Receiver(BaseReceiver, Link):
 
   def __init__(self, connection, source):
-    BaseReceiver.__init__(self, str(uuid4()), source, None)
+    BaseReceiver.__init__(self, str(uuid4()), Linkage(source, None))
     Link.__init__(self, connection)
 
   @synchronized
   def pending(self, block=False, timeout=None):
     if block:
-      self.wait(lambda: self.capacity() == 0 or BaseReceiver.pending(self) > 0,
-                timeout)
+      self.wait(self._pending_unblocked, timeout)
     return BaseReceiver.pending(self)
+
+  def _pending_unblocked(self):
+    return self.capacity() == 0 or BaseReceiver.pending(self) > 0
+
+  @synchronized
+  def draining(self, block=False, timeout=None):
+    if block:
+      self.wait(self._draining_unblocked, timeout)
+    return BaseReceiver.draining(self)
+
+  def _draining_unblocked(self):
+    return BaseReceiver.draining(self)

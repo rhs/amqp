@@ -30,7 +30,7 @@ parser.add_option("-p", "--port", type=int, default=5672,
 parser.add_option("-b", "--block", action="store_true",
                   help="block until messages arrive")
 parser.add_option("-c", "--count", type=int, default=1,
-                  help="number of messages to send (default %default)")
+                  help="number of messages to receive (default %default)")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
 
@@ -51,8 +51,7 @@ if opts.count:
   credit = min(10, opts.count)
 else:
   credit = 10
-lnk = ssn.receiver(addr, limit=credit)
-if not opts.block: lnk.drain()
+lnk = ssn.receiver(addr, limit=credit, drain=not opts.block)
 
 count = 0
 try:
@@ -61,21 +60,24 @@ try:
     count += 1
     print "".join([f.payload for f in xfr.fragments])
     sys.stdout.flush()
-    lnk.ack(xfr)
+    lnk.disposition(xfr.delivery_tag, "ACCEPTED")
     if lnk.capacity() == 0:
       if opts.count == 0:
         credit = 10
       else:
         credit = min(10, opts.count - (count + lnk.pending()))
       if credit:
-        lnk.flow(credit)
-        if not opts.block: lnk.drain()
+        lnk.flow(credit, drain=not opts.block)
 except KeyboardInterrupt:
   pass
 
 lnk.close()
 ssn.close()
 conn.close()
+
+# XXX
+for tag, st in lnk.get_remote(settled=True):
+  lnk.settle(tag)
 
 if lnk.unsettled:
   print lnk.unsettled

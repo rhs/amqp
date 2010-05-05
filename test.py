@@ -57,12 +57,12 @@ print "Decoded:", dec.decode(bytes)[0], generic_dec.decode(bytes)[0]
 
 print
 
-from framing import FrameDecoder, FrameEncoder, ConnectionFrame, SessionFrame
+from framing import Frame, FrameDecoder, FrameEncoder
 
 frenc = FrameEncoder()
-frenc.write(ConnectionFrame(0, 0, "frame1 body"))
-frenc.write(SessionFrame(0, 0, 0, 0, 0, 0, "frame2 body"))
-frenc.write(ConnectionFrame(0, 0, "frame3 body"))
+frenc.write(Frame(0, 1, None, "frame1 body"))
+frenc.write(Frame(0, 2, "extended header", "frame2 body"))
+frenc.write(Frame(1, 0, "e", "frame3 body"))
 bytes = frenc.read()
 print "Encoded Frames:", repr(bytes)
 
@@ -80,10 +80,14 @@ def connection():
   from connection import Connection
   from session import Session
   from link import Sender, Receiver, link
-  from operations import Fragment
+  from protocol import Fragment, Linkage
 
   a = Connection(lambda n: Session(n, link))
   b = Connection(lambda n: Session(n, link))
+  a.id = "A"
+  a.tracing = set(["ops", "err"])
+  b.id = "B"
+  b.tracing = set(["ops", "err"])
 
   def pump():
     while a.pending() or b.pending():
@@ -97,20 +101,18 @@ def connection():
 
   a.open(hostname="asdf")
   b.open()
-  s.attach()
-  s2.attach()
-  s.detach(False)
-  s.attach()
-  l = Sender("qwer", source="S", target="T")
+  s.begin()
+  s2.begin()
+  l = Sender("qwer", local=Linkage("S", "T"))
   s.add(l)
-  l.link()
+  l.attach()
 
   pump()
 
-  bssn = b.sessions["test-ssn"]
-  bssn.attach()
+  bssn = [x for x in b.incoming.values() if x.name == "test-ssn"][0]
+  bssn.begin()
   bl = bssn.links["qwer"]
-  bl.link()
+  bl.attach()
   bl.flow(10)
 
   pump()
@@ -123,11 +125,11 @@ def connection():
   ln = bssn.links["qwer"]
   x = ln.get()
   print "INCOMING XFR:", x
-  ln.ack(x)
+  ln.disposition(x.delivery_tag, "ACCEPTED")
 
   xfr = ln.get()
   print "INCOMING XFR:", xfr
-  ln.ack(xfr, key="value")
+  ln.disposition(xfr.delivery_tag, "ASDF")
 
   print "--"
 
@@ -135,18 +137,18 @@ def connection():
 
   print "--"
 
-  print "DISPOSITION", l.get()
+  print "DISPOSITION", l.get_remote(modified=True)
   l.settle(tag)
 
-  l.unlink()
-  bl.unlink()
+  l.detach()
+  bl.detach()
 
   pump()
 
-  s.detach(True)
+  s.end(True)
   pump()
-  bssn.detach(True)
-  s2.detach(True)
+  bssn.end(True)
+  s2.end(True)
   a.close()
   b.close()
 
@@ -158,17 +160,19 @@ def session():
   from connection import Connection
   from session import Session
   from link import link, Sender, Receiver
+  from protocol import Fragment, Linkage
 
-  a = Connection(None)
+  a = Connection(lambda n: Session(n, link))
   a.tracing = set(["ops", "err"])
   a.id = "A"
-  b = Connection(None)
+  b = Connection(lambda n: Session(n, link))
   b.tracing = set(["err"])
   b.id = "B"
   ssn = Session("test", link)
   a.add(ssn)
-  nss = Session("test", link)
-  b.add(nss)
+  ssn.begin()
+#  nss = Session("test", link)
+#  b.add(nss)
 
   def pump():
     a.tick()
@@ -176,28 +180,29 @@ def session():
     b.write(a.read())
     a.write(b.read())
 
-  ssn.attach()
-  nss.attach()
+  pump()
+
+  nss = [s for s in b.incoming.values() if s.name == "test"][0]
+  nss.begin()
 
   snd = Sender("L", "S", "T")
   ssn.add(snd)
   rcv = Receiver("L", "S", "T")
   nss.add(rcv)
 
-  snd.link()
-  rcv.link()
+  snd.attach()
+  rcv.attach()
   rcv.flow(10)
 
   pump()
 
-  from operations import Fragment
   snd.send(fragments=Fragment(True, True, 0, 0, "m1"))
   snd.send(fragments=Fragment(True, True, 0, 0, "m2"))
   dt3 = snd.send(fragments=Fragment(True, True, 0, 0, "m3"))
 
   pump()
 
-  print rcv.pending()
+  print "PENDING", rcv.pending()
 
   pump()
 
@@ -211,7 +216,7 @@ def session():
     xfrs.append(x)
     print "XFR", x
 
-  rcv.ack(xfrs[-1])
+  rcv.disposition(xfrs[-1].delivery_tag, "ACCEPTED")
 
   pump()
 
@@ -219,42 +224,42 @@ def session():
 
   pump()
 
-  print nss.exe_deferred
-
-  print nss.executed
-  rcv.ack(xfrs[0])
-  print nss.executed
-  print nss.syncpoint
+  rcv.disposition(xfrs[0].delivery_tag, "ACCEPTED")
 
   print "----------"
   pump()
   print "----------"
 
-  print nss.executed
+  print "ssn.outgoing:", ssn.outgoing
+  print "snd.unsettled:", snd.unsettled
   for xfr in xfrs[1:-1]:
-    rcv.ack(xfr)
-  print nss.executed, nss.exe_deferred
-  print rcv.pending()
-  rcv.ack(rcv.get())
+    rcv.disposition(xfr.delivery_tag, "ACCEPTED")
+  print "rcv.unsettled", rcv.unsettled
+  print "rcv.pending()", rcv.pending()
+  rcv.disposition(rcv.get().delivery_tag)
 
   pump()
   print "----------"
 
-  print ssn.acknowledged, ssn.ack_deferred
+  print "ssn.outgoing:", ssn.outgoing
+  print "snd.unsettled:", snd.unsettled
 
+  print "settling:", dt3
   snd.settle(dt3)
 
-  print ssn.acknowledged, ssn.ack_deferred
+  print "ssn.outgoing:", ssn.outgoing
+  print "snd.unsettled:", snd.unsettled
 
   for dt in list(snd.unsettled):
     snd.settle(dt)
 
-  snd.unlink()
-  rcv.unlink()
+  snd.detach()
+  rcv.detach()
 
   pump()
 
-  print ssn.acknowledged, ssn.ack_deferred, ssn.on_exe
+  print "ssn.outgoing:", ssn.outgoing
+  print "snd.unsettled:", snd.unsettled
 
 print "=========="
 session()

@@ -34,8 +34,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 
 <amqp name="transport" xmlns="http://www.amqp.org/schema/amqp.xsd">
-  <section name="controls">
-    <type name="open" class="compound">
+  <section name="frame-bodies">
+    <type name="open" class="compound" source="list" provides="frame">
       <descriptor name="amqp:open:list" code="0x00000001:0x00000201"/>
       <field name="options" type="options"/>
       <field name="container-id" type="string" required="true"/>
@@ -49,223 +49,113 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
     </type>
-    <type name="attach" class="compound">
-      <descriptor name="amqp:attach:list" code="0x00000001:0x00000202"/>
+    <type name="begin" class="compound" source="list" provides="frame">
+      <descriptor name="amqp:begin:list" code="0x00000001:0x00000202"/>
       <field name="options" type="options"/>
-      <field name="name" type="session-name" required="true"/>
-      <field name="opening" type="boolean"/>
-      <field name="received" type="sequence-no"/>
-      <field name="timeout" type="uint"/>
-      <field name="txn-mode" type="txn-level"/>
-      <field name="txn-support" type="txn-level"/>
+      <field name="remote-channel" type="ushort"/>
+      <field name="name" type="string"/>
     </type>
-    <type name="detach" class="compound">
-      <descriptor name="amqp:detach:list" code="0x00000001:0x00000203"/>
-      <field name="options" type="options"/>
-      <field name="name" type="session-name" required="true"/>
-      <field name="closing" type="boolean"/>
-      <field name="exception" type="session-error"/>
-    </type>
-    <type name="close" class="compound">
-      <descriptor name="amqp:close:list" code="0x00000001:0x00000204"/>
-      <field name="options" type="options"/>
-      <field name="exception" type="connection-error"/>
-    </type>
-  </section>
-  <section name="commands">
-    <type name="noop" class="compound">
-      <descriptor name="amqp:noop:list" code="0x00000001:0x00000301"/>
-      <field name="options" type="options"/>
-    </type>
-    <type name="enlist" class="compound">
-      <descriptor name="amqp:enlist:list" code="0x00000001:0x00000302"/>
-      <exception name="illegal-state" error-code="illegal-state"/>
-      <exception name="already-known" error-code="not-allowed"/>
-      <exception name="join-and-resume" error-code="not-allowed"/>
-      <exception name="xa-rbrollback" error-code="xa-rbrollback"/>
-      <exception name="xa-rbtimeout" error-code="xa-rbtimeout"/>
-      <field name="options" type="options"/>
-      <field name="xid" type="xid" required="true">
-        <exception name="unknown-xid" error-code="not-allowed"/>
-      </field>
-      <field name="join" type="boolean">
-        <exception name="unsupported" error-code="not-implemented"/>
-      </field>
-      <field name="resume" type="boolean"/>
-    </type>
-    <type name="txn" class="compound">
-      <descriptor name="amqp:txn:list" code="0x00000001:0x00000303"/>
-      <exception name="illegal-state" error-code="illegal-state"/>
-      <exception name="suspend-and-fail" error-code="not-allowed"/>
-      <exception name="xa-rbrollback" error-code="xa-rbrollback"/>
-      <exception name="xa-rbtimeout" error-code="xa-rbtimeout"/>
-      <field name="options" type="options"/>
-      <field name="fail" type="boolean"/>
-      <field name="suspend" type="boolean"/>
-    </type>
-    <type name="link" class="compound">
-      <descriptor name="amqp:link:list" code="0x00000001:0x00000304"/>
+    <type name="attach" class="compound" source="list" provides="frame">
+      <descriptor name="amqp:attach:list" code="0x00000001:0x00000304"/>
       <field name="options" type="options"/>
       <field name="name" type="string" required="true"/>
-      <field name="scope" type="scope"/>
       <field name="handle" type="handle" required="true">
-        <exception name="duplicate-link" error-code="invalid-argument"/>
-        <exception name="duplicate-handle" error-code="invalid-argument"/>
+        <error name="handle-busy" type="amqp-error" value="invalid-field"/>
       </field>
+      <field name="flow-state" type="flow-state" required="true"/>
       <field name="direction" type="direction"/>
-      <field name="source" type="map"/>
-      <field name="target" type="map"/>
+      <field name="local" type="linkage"/>
+      <field name="remote" type="linkage"/>
+      <field name="durable" type="boolean"/>
+      <field name="opening" type="boolean"/>
+      <field name="timeout" type="uint"/>
+      <field name="unsettled" type="map"/>
       <field name="transfer-unit" type="ulong"/>
-      <field name="resume-tag" type="delivery-tag"/>
+      <field name="error-mode" type="error-mode"/>
     </type>
-    <type name="relink" class="compound">
-      <descriptor name="amqp:relink:list" code="0x00000001:0x00000305"/>
-      <field name="options" type="options"/>
-      <field name="handle" type="handle"/>
-      <field name="source" type="map"/>
-      <field name="target" type="map"/>
-    </type>
-    <type name="unlink" class="compound">
-      <descriptor name="amqp:unlink:list" code="0x00000001:0x00000306"/>
-      <field name="options" type="options"/>
-      <field name="handle" type="handle"/>
-      <field name="exception" type="link-error"/>
-    </type>
-    <type name="flow" class="compound">
+    <type name="flow" class="compound" source="list" provides="frame">
       <descriptor name="amqp:flow:list" code="0x00000001:0x00000307"/>
       <field name="options" type="options"/>
       <field name="handle" type="handle" required="true">
-        <exception name="nonexistent-link" error-code="invalid-argument"/>
-        <exception name="invalid-directionality" error-code="invalid-argument"/>
+        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
       </field>
-      <field name="limit" type="sequence-no"/>
+      <field name="flow-state" type="flow-state" required="true"/>
+      <field name="echo" type="boolean"/>
     </type>
-    <type name="drain" class="compound">
-      <descriptor name="amqp:drain:list" code="0x00000001:0x00000308"/>
-      <field name="options" type="options"/>
-      <field name="handle" type="handle" required="true">
-        <exception name="nonexistent-link" error-code="invalid-argument"/>
-        <exception name="invalid-directionality" error-code="invalid-argument"/>
-      </field>
-    </type>
-    <type name="transfer" class="compound">
+    <type name="transfer" class="compound" source="list" provides="frame">
       <descriptor name="amqp:transfer:list" code="0x00000001:0x00000309"/>
       <field name="options" type="options"/>
       <field name="handle" type="handle" required="true">
-        <exception name="nonexistent-link" error-code="not-found"/>
+        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
       </field>
+      <field name="flow-state" type="flow-state" required="true"/>
       <field name="delivery-tag" type="delivery-tag" required="true"/>
+      <field name="transfer-id" type="transfer-number" required="true"/>
+      <field name="settled" type="boolean"/>
+      <field name="state" type="*"/>
+      <field name="resume" type="boolean"/>
       <field name="more" type="boolean"/>
       <field name="aborted" type="boolean"/>
+      <field name="batchable" type="boolean"/>
       <field name="fragments" type="fragment" multiple="true"/>
     </type>
-    <type name="bar" class="compound">
-      <descriptor name="amqp:bar:list" code="0x00000001:0x00009901"/>
-      <field name="options" type="options"/>
-      <field name="handle" type="handle" required="true">
-        <exception name="nonexistent-link" error-code="not-found"/>
-      </field>
-      <field name="barrier" type="delivery-tag"/>
-    </type>
-    <type name="disposition" class="compound">
+    <type name="disposition" class="compound" source="list" provides="frame">
       <descriptor name="amqp:disposition:list" code="0x00000001:0x00009902"/>
       <field name="options" type="options"/>
-      <field name="handle" type="handle" required="true">
-        <exception name="nonexistent-link" error-code="not-found"/>
-      </field>
-      <field name="disposition" type="map" required="true"/>
-      <field name="first" type="delivery-tag" required="true"/>
-      <field name="last" type="delivery-tag"/>
+      <field name="direction" type="direction" required="true"/>
+      <field name="settled" type="transfer-number" required="true"/>
+      <field name="unsettled-limit" type="transfer-number" required="true"/>
+      <field name="batchable" type="boolean"/>
+      <field name="extents" type="extent" multiple="true"/>
+    </type>
+    <type name="detach" class="compound" source="list" provides="frame">
+      <descriptor name="amqp:detach:list" code="0x00000001:0x00000306"/>
+      <field name="options" type="options"/>
+      <field name="handle" type="handle" required="true"/>
+      <field name="closing" type="boolean"/>
+      <field name="error" type="error"/>
+    </type>
+    <type name="end" class="compound" source="list" provides="frame">
+      <descriptor name="amqp:end:list" code="0x00000001:0x00000203"/>
+      <field name="options" type="options"/>
+      <field name="error" type="error"/>
+    </type>
+    <type name="close" class="compound" source="list" provides="frame">
+      <descriptor name="amqp:close:list" code="0x00000001:0x00000204"/>
+      <field name="options" type="options"/>
+      <field name="error" type="error"/>
     </type>
   </section>
   <section name="definitions">
-    <definition name="PORT" value="5672"/>
-    <definition name="MAJOR" value="1"/>
-    <definition name="MINOR" value="0"/>
-    <definition name="REVISION" value="0"/>
-    <definition name="MIN-MAX-FRAME-SIZE" value="4096"/>
-    <type name="connection-error" class="compound">
-      <descriptor name="amqp:connection-error:list" code="0x00000001:0x00000101"/>
-      <field name="error-code" type="connection-error-code" required="true"/>
-      <field name="description" type="string"/>
-      <field name="error-info" type="map"/>
-    </type>
-    <type name="connection-error-code" class="restricted" source="ushort">
-      <choice name="connection-forced" value="320"/>
-      <choice name="internal-error" value="500"/>
-      <choice name="framing-error" value="501"/>
-    </type>
-    <type name="session-name" class="restricted" source="binary"/>
-    <type name="sequence-no" class="restricted" source="uint"/>
-    <type name="session-error" class="compound">
-      <descriptor name="amqp:session-error:list" code="0x00000001:0x00000102"/>
-      <field name="error-code" type="session-error-code" required="true"/>
-      <field name="command-id" type="sequence-no"/>
-      <field name="command-code" type="ubyte"/>
-      <field name="field-index" type="ubyte"/>
-      <field name="description" type="string"/>
-      <field name="error-info" type="map"/>
-    </type>
-    <type name="session-error-code" class="restricted" source="ushort">
-      <choice name="unauthorized-access" value="4003"/>
-      <choice name="not-found" value="4004"/>
-      <choice name="resource-locked" value="4005"/>
-      <choice name="precondition-failed" value="4006"/>
-      <choice name="resource-deleted" value="4008"/>
-      <choice name="illegal-state" value="4009"/>
-      <choice name="transfer-limit-exceeded" value="4010"/>
-      <choice name="command-invalid" value="5003"/>
-      <choice name="resource-limit-exceeded" value="5006"/>
-      <choice name="not-allowed" value="5030"/>
-      <choice name="illegal-argument" value="5031"/>
-      <choice name="not-implemented" value="5040"/>
-      <choice name="internal-error" value="5041"/>
-      <choice name="invalid-argument" value="5042"/>
-      <choice name="xa-rbrollback" value="6001"/>
-      <choice name="xa-rbtimeout" value="6002"/>
-      <choice name="xa-heurhaz" value="6003"/>
-      <choice name="xa-heurcom" value="6004"/>
-      <choice name="xa-heurrb" value="6005"/>
-      <choice name="xa-heurmix" value="6006"/>
-      <choice name="xa-rdonly" value="6007"/>
-    </type>
-    <type name="link-error" class="compound">
-      <descriptor name="amqp:link-error:list" code="0x00000001:0x00000103"/>
-      <field name="error-code" type="link-error-code" required="true"/>
-      <field name="description" type="string"/>
-      <field name="error-info" type="map"/>
-    </type>
-    <type name="link-error-code" class="restricted" source="ushort">
-      <choice name="unlink-forced" value="320"/>
-      <choice name="source-destroyed" value="321"/>
-      <choice name="target-destroyed" value="322"/>
-      <choice name="not-allowed" value="401"/>
-      <choice name="source-not-found" value="404"/>
-      <choice name="target-not-found" value="405"/>
-      <choice name="other-error" value="599"/>
-    </type>
-    <type name="txn-level" class="restricted" source="ubyte">
-      <choice name="local" value="1"/>
-      <choice name="distributed" value="2"/>
-      <choice name="promotable" value="3"/>
-    </type>
-    <type name="xid" class="compound">
-      <descriptor name="amqp:xid:list" code="0x00000001:0x00000104"/>
-      <field name="format" type="uint" required="true"/>
-      <field name="global-id" type="binary" required="true"/>
-      <field name="branch-id" type="binary" required="true"/>
-    </type>
-    <type name="handle" class="restricted" source="uint"/>
     <type name="direction" class="restricted" source="ubyte">
       <choice name="incoming" value="0"/>
       <choice name="outgoing" value="1"/>
     </type>
-    <type name="scope" class="restricted" source="ubyte">
-      <choice name="session" value="0"/>
-      <choice name="container" value="1"/>
+    <type name="handle" class="restricted" source="uint"/>
+    <type name="linkage" class="compound" source="list">
+      <descriptor name="amqp:linkage:list" code="0x00000001:0x00009105"/>
+      <field name="source" type="*"/>
+      <field name="target" type="*"/>
+    </type>
+    <type name="flow-state" class="compound" source="list">
+      <descriptor name="amqp:flow-state:list" code="0x00000001:0x00000105"/>
+      <field name="transfer-count" type="sequence-no" required="true"/>
+      <field name="transfer-limit" type="sequence-no"/>
+      <field name="attainable-limit" type="sequence-no"/>
+      <field name="drain" type="boolean"/>
     </type>
     <type name="delivery-tag" class="restricted" source="binary"/>
-    <type name="fragment" class="compound">
+    <type name="transfer-number" class="restricted" source="sequence-no"/>
+    <type name="sequence-no" class="restricted" source="uint"/>
+    <type name="extent" class="compound" source="list">
+      <descriptor name="amqp:extent:list" code="0x00000001:0x00099901"/>
+      <field name="first" type="transfer-number" required="true"/>
+      <field name="last" type="transfer-number"/>
+      <field name="handle" type="uint"/>
+      <field name="settled" type="boolean"/>
+      <field name="state" type="*"/>
+    </type>
+    <type name="fragment" class="compound" source="list">
       <descriptor name="amqp:fragment:list" code="0x00000001:0x00009903"/>
       <field name="first" type="boolean"/>
       <field name="last" type="boolean"/>
@@ -274,7 +164,47 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="payload" type="binary"/>
     </type>
     <type name="options" class="restricted" source="map">
-      <exception name="unknown-option" error-code="not-implemented"/>
+      <error name="unknown-option" type="amqp-error" value="not-implemented"/>
     </type>
+    <type name="error-mode" class="restricted" source="ubyte">
+      <choice name="detach" value="0"/>
+      <choice name="end" value="1"/>
+    </type>
+    <type name="error" class="compound" source="list">
+      <descriptor name="amqp:error:list" code="0x00000001:0x00000101"/>
+      <field name="condition" type="symbol" required="true" requires="error"/>
+      <field name="description" type="string"/>
+      <field name="info" type="map"/>
+    </type>
+    <type name="amqp-error" class="restricted" source="symbol" provides="error">
+      <choice name="internal-error" value="amqp:internal-error"/>
+      <choice name="not-found" value="amqp:not-found"/>
+      <choice name="unauthorized-access" value="amqp:unauthorized-access"/>
+      <choice name="decode-error" value="amqp:decode-error"/>
+      <choice name="resource-limit-exceeded" value="amqp:resource-limit-exceeded"/>
+      <choice name="not-allowed" value="amqp:not-allowed"/>
+      <choice name="invalid-field" value="amqp:invalid-field"/>
+      <choice name="not-implemented" value="amqp:not-implemented"/>
+      <choice name="resource-locked" value="amqp:resource-locked"/>
+      <choice name="precondition-failed" value="amqp:precondition-failed"/>
+      <choice name="resource-deleted" value="amqp:resource-deleted"/>
+      <choice name="illegal-state" value="amqp:illegal-state"/>
+    </type>
+    <type name="connection-error" class="restricted" source="symbol" provides="error">
+      <choice name="connection-forced" value="amqp:connection:forced"/>
+      <choice name="framing-error" value="amqp:connection:framing-error"/>
+    </type>
+    <type name="session-error" class="restricted" source="symbol" provides="error">
+      <choice name="unsettled-limit-exceeded" value="amqp:session:unsettled-limit-exceeded"/>
+    </type>
+    <type name="link-error" class="restricted" source="symbol" provides="error">
+      <choice name="detach-forced" value="amqp:link:detach-forced"/>
+      <choice name="transfer-limit-exceeded" value="amqp:link:transfer-limit-exceeded"/>
+    </type>
+    <definition name="PORT" value="5672"/>
+    <definition name="MAJOR" value="1"/>
+    <definition name="MINOR" value="0"/>
+    <definition name="REVISION" value="0"/>
+    <definition name="MIN-MAX-FRAME-SIZE" value="4096"/>
   </section>
 </amqp>

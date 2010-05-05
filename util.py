@@ -125,5 +125,104 @@ class ConnectionSelectable:
     self.socket = None
 
   def writeable(self):
+    # XXX: error handling
     n = self.socket.send(self.connection.peek())
     bytes = self.connection.read(n)
+
+class Range:
+
+  def __init__(self, lower, upper = None):
+    self.lower = lower
+    if upper is None:
+      self.upper = self.lower
+    else:
+      self.upper = upper
+    assert self.lower <= self.upper
+
+  def __contains__(self, n):
+    return self.lower <= n and n <= self.upper
+
+  def __iter__(self):
+    i = self.lower
+    while i <= self.upper:
+      yield i
+      i += 1
+
+  def touches(self, r):
+    # XXX: are we doing more checks than we need?
+    return (self.lower - 1 in r or
+            self.upper + 1 in r or
+            r.lower - 1 in self or
+            r.upper + 1 in self or
+            self.lower in r or
+            self.upper in r or
+            r.lower in self or
+            r.upper in self)
+
+  def span(self, r):
+    return Range(min(self.lower, r.lower), max(self.upper, r.upper))
+
+  def intersect(self, r):
+    lower = max(self.lower, r.lower)
+    upper = min(self.upper, r.upper)
+    if lower > upper:
+      return None
+    else:
+      return Range(lower, upper)
+
+  def __repr__(self):
+    return "%s-%s" % (self.lower, self.upper)
+
+class RangeSet:
+
+  def __init__(self, *args):
+    self.ranges = []
+    for n in args:
+      self.add(n)
+
+  def __contains__(self, n):
+    for r in self.ranges:
+      if n in r:
+        return True
+    return False
+
+  def add_range(self, range):
+    idx = 0
+    while idx < len(self.ranges):
+      r = self.ranges[idx]
+      if range.touches(r):
+        del self.ranges[idx]
+        range = range.span(r)
+      elif range.upper < r.lower:
+        self.ranges.insert(idx, range)
+        return
+      else:
+        idx += 1
+    self.ranges.append(range)
+
+  def add(self, lower, upper = None):
+    self.add_range(Range(lower, upper))
+
+  def empty(self):
+    for r in self.ranges:
+      if r.lower <= r.upper:
+        return False
+    return True
+
+  def max(self):
+    if self.ranges:
+      return self.ranges[-1].upper
+    else:
+      return None
+
+  def min(self):
+    if self.ranges:
+      return self.ranges[0].lower
+    else:
+      return None
+
+  def __iter__(self):
+    return iter(self.ranges)
+
+  def __repr__(self):
+    return str(self.ranges)

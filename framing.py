@@ -20,67 +20,39 @@
 import struct
 from util import Buffer, parse
 
-CONN_FRAME = 0
-SSN_FRAME = 1
-FRAME_HDR = 24
+AMQP_FRAME = 0
+FRAME_HDR_FMT = "!I2BH"
+FRAME_HDR_SIZE = struct.calcsize(FRAME_HDR_FMT)
+assert FRAME_HDR_SIZE == 8
 
 class Frame:
 
-  def __init__(self, type, flags, channel, payload):
+  def __init__(self, type, channel, extended, payload):
     self.type = type
-    self.flags = flags
     self.channel = channel
+    self.extended = extended
     self.payload = payload
 
-class SessionFrame(Frame):
-
-  def __init__(self, flags, channel, acknowledged, executed, capacity,
-               command_id, payload):
-    Frame.__init__(self, SSN_FRAME, flags, channel, payload)
-    self.acknowledged = acknowledged
-    self.executed = executed
-    self.capacity = capacity
-    self.command_id = command_id
-
   def __repr__(self):
-    args = (self.flags, self.channel, self.executed, self.capacity,
-            self.command_id, self.payload)
-    return "SessionFrame(%s)" % ", ".join(map(repr, args))
-
-class ConnectionFrame(Frame):
-
-  def __init__(self, flags, channel, payload):
-    Frame.__init__(self, CONN_FRAME, flags, channel, payload)
-
-  def __repr__(self):
-    args = (self.flags, self.channel, self.payload)
-    return "ConnectionFrame(%s)" % ", ".join(map(repr, args))
+    return "Frame(%s, %s, %r, %r)" % \
+        (self.type, self.channel, self.extended, self.payload)
 
 class FrameEncoder:
 
   def __init__(self):
     self.buffer = Buffer()
-    self.encoders = {
-      SSN_FRAME: self.encode_ssn,
-      CONN_FRAME: self.encode_conn
-      }
 
   def write(self, frame):
     self.buffer.write(self.encode(frame))
 
   def encode(self, frame):
-    return self.encoders[frame.type](frame)
-
-  def encode_ssn(self, frame):
-    header = struct.pack("!I2BH4I", FRAME_HDR + len(frame.payload), frame.type,
-                         frame.flags, frame.channel, frame.acknowledged,
-                         frame.executed, frame.capacity, frame.command_id)
-    return "%s%s" % (header, frame.payload)
-
-  def encode_conn(self, frame):
-    header = struct.pack("!I2BH16x", FRAME_HDR + len(frame.payload),
-                         frame.type, frame.flags, frame.channel)
-    return "%s%s" % (header, frame.payload)
+    extended = frame.extended or ""
+    padd = len(extended) % 4
+    if padd: extended += "\x00"*(4-padd)
+    size = FRAME_HDR_SIZE + len(extended) + len(frame.payload)
+    doff = (FRAME_HDR_SIZE + len(extended))/4
+    header = struct.pack(FRAME_HDR_FMT, size, doff, frame.type, frame.channel)
+    return "%s%s%s" % (header, extended, frame.payload)
 
   def read(self, n=None):
     return self.buffer.read(n)
@@ -94,43 +66,35 @@ class FrameDecoder:
     self.state = self.__frame_header
 
     self.size = None
+    self.doff = None
     self.type = None
-    self.flags = None
     self.channel = None
-    self.control = None
-
-    self.decoders = {
-      SSN_FRAME: self.__decode_ssn,
-      CONN_FRAME: self.__decode_conn
-      }
+    self.extended = None
 
   def write(self, bytes):
     self.input.write(bytes)
     self.state = parse(self.state)
 
   def __frame_header(self):
-    if self.input.pending() >= FRAME_HDR:
-      st = self.input.read(FRAME_HDR)
-      self.size, self.type, self.flags, self.channel, self.control = \
-          struct.unpack("!I2BH16s", st)
+    if self.input.pending() >= FRAME_HDR_SIZE:
+      st = self.input.read(FRAME_HDR_SIZE)
+      self.size, self.doff, self.type, self.channel = \
+          struct.unpack(FRAME_HDR_FMT, st)
+      return self.__frame_extended
+
+  def __frame_extended(self):
+    size = self.doff*4 - FRAME_HDR_SIZE
+    if self.input.pending() >= size:
+      self.extended = self.input.read(size)
       return self.__frame_body
 
   def __frame_body(self):
-    size = self.size - FRAME_HDR
+    size = self.size - self.doff*4
     if self.input.pending() >= size:
       payload = self.input.read(size)
-      frame = self.decoders[self.type](payload)
+      frame = Frame(self.type, self.channel, self.extended, payload)
       self.output.append(frame)
       return self.__frame_header
-
-  def __decode_ssn(self, payload):
-    acknowledged, executed, capacity, command_id = \
-        struct.unpack("!4I", self.control)
-    return SessionFrame(self.flags, self.channel, acknowledged, executed,
-                        capacity, command_id, payload)
-
-  def __decode_conn(self, payload):
-    return ConnectionFrame(self.flags, self.channel, payload)
 
   def read(self, n=None):
     result = self.output[:n]

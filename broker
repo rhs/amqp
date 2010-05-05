@@ -39,30 +39,36 @@ class Broker:
     if connection.opening():
       connection.open()
 
-    for ssn in connection.sessions.values():
-      if ssn.attaching():
-        ssn.attach()
+    # XXX
+    for ssn in connection.incoming.values():
+      if ssn.beginning():
+        ssn.begin()
 
+    for ssn in connection.outgoing.values():
       for link in ssn.links.values():
         if link.opening():
-          if link.local in self.queues:
-            link.link()
-            self.init[link.direction](link)
+          if self.init[link.direction](link):
+            link.local = link.remote
+            link.attach()
           else:
             link.local = None
-            link.link()
-            link.unlink()
-            ssn.remove(link)
-            continue
+            # XXX
+            link.modified = True
+            link.attach()
+            link.detach()
 
-        self.process[link.direction](link)
+        # XXX
+        if link.local:
+          self.process[link.direction](link)
 
         if link.closing():
-          link.unlink()
+          link.detach()
+
+        if link.closed():
           ssn.remove(link)
 
-      if ssn.detaching():
-        ssn.detach(True)
+      if ssn.ending():
+        ssn.end()
         connection.remove(ssn)
 
     if connection.closing():
@@ -71,42 +77,51 @@ class Broker:
     connection.tick()
 
   def init_sender(self, link):
-    q = self.queues[link.source]
-    cursor = q.cursor(DESTRUCTIVE)
-    self.cursors[link] = cursor, {}
+    if link.remote.source in self.queues:
+      q = self.queues[link.remote.source]
+      cursor = q.cursor(DESTRUCTIVE)
+      self.cursors[link] = cursor, {}
+      return True
+    else:
+      return False
 
   def init_receiver(self, link):
-    link.flow(10)
+    if link.remote.target in self.queues:
+      link.flow(10)
+      return True
+    else:
+      return False
 
   def process_sender(self, link):
     cursor, unacked = self.cursors[link]
     while link.capacity() > 0:
       entry = cursor.get()
       if entry is None:
-        link.empty()
+        link.drained()
         break
       elif entry.item is None:
         continue
       else:
         xfr = entry.item
-        print "TRANSFER:", xfr
         tag = link.send(fragments = xfr.fragments)
+        print "TRANSFER:", tag, xfr
         unacked[tag] = entry
-    while link.pending():
-      t, d = link.get()
-      e = unacked[t]
-      xfr = e.item
-      e.dequeue()
-      print "DEQUEUED:", xfr
-      del unacked[t]
-      link.settle(t)
+
+    for t, r in link.get_remote():
+      if r.settled or r.state is not None:
+        e = unacked[t]
+        xfr = e.item
+        e.dequeue()
+        print "DEQUEUED:", t, r
+        del unacked[t]
+        link.settle(t, "DEQUEUED")
 
   def process_receiver(self, link):
     while link.pending():
       xfr = link.get()
-      self.queues[link.target].put(xfr)
+      self.queues[link.local.target].put(xfr)
       print "ENQUEUED:", xfr
-      link.ack(xfr)
+      link.settle(xfr.delivery_tag, "ENQUEUED")
     if link.capacity() < 10: link.flow(10)
 
 def bind(host, port):

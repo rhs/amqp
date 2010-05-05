@@ -1,4 +1,4 @@
-This project contains a partial prototype of AMQP 1-0 PR2. This
+This project contains a partial prototype of AMQP 1-0 PR3 draft. This
 currently includes relatively complete components for framing, codec,
 connection, session, and link endpoints, as well as a very simple
 broker, client library, and send/recv utilities.
@@ -23,8 +23,8 @@ Getting Started:
      option which may be used to print a protocol trace:
 
        ./send -t raw queue-a trace raw bytes
-       ./send -t ops queue-b trace operations before/after encode/decode
-       ./send -t "raw ops err" queue-c trace everything
+       ./send -t frm queue-b trace operations before/after encode/decode
+       ./send -t "raw frm err" queue-c trace everything
 
 Files:
 
@@ -38,6 +38,9 @@ Files:
 
   codec.py       -- An implementation of the AMQP type system.
 
+  compound.py    -- Base class for compound types and utilities for
+                    loading compound type definitions from the xml.
+
   concurrency.py -- Concurrency utilities.
 
   connection.py  -- An implementation of an AMQP connection endpoint.
@@ -48,8 +51,8 @@ Files:
 
   mllib/         -- An XML parsing library used to load type definitions.
 
-  operations.py  -- Classes representing all the operations and related
-                    types defined by the AMQP transport specification.
+  protocol.py    -- Classes representing the types defined by the
+                    protocol specification.
 
   README         -- This file.
 

@@ -17,98 +17,143 @@
 # under the License.
 #
 
-from operations import Drain, Flow, Link as LinkCmd, Unlink, Transfer, \
-    Disposition
+from protocol import Attach, Detach, Transfer, Disposition, Flow, FlowState, \
+    Extent
 from util import Constant
 from uuid import uuid4
 
 class LinkError(Exception):
   pass
 
-PENDING = Constant("PENDING")
+class State:
+
+  def __init__(self, state=None, settled=False, modified=False):
+    self.state = state
+    self.settled = settled
+    self.modified = modified
+
+  def __hash__(self):
+    return hash(self.state) ^ hash(self.settled)
+
+  def __eq__(self, o):
+    return self.state == o.state and self.settled == o.settled
+
+  def __repr__(self):
+    return "State(%s, %s, %s)" % (self.state, self.settled, self.modified)
+
+ATTACHED = Constant("ATTACHED")
+DETACHED = Constant("DETACHED")
 
 class Link(object):
 
-  def __init__(self, name, source, target):
+  def __init__(self, name, local, remote=None):
     self.name = name
-    self.source = source
-    self.target = target
+    self.local = local
+    self.remote = remote
 
-    self.session = None
     self.handle = None
 
-    self.links_rcvd = 0
-    self.links_sent = 0
-    self.unlinks_rcvd = 0
-    self.unlinks_sent = 0
+    # local and remote state can be None, ATTACHED, DETACHED
+    self.local_state = None
+    self.remote_state = None
 
-    self.limit = 0
-    self.count = 0
-    self.link_tag = uuid4()
+    # flow state
+    self.transfer_count = 0
+    self.transfer_limit = 0
+    self.attainable_limit = 0
+    self.drain = False
+    self.modified = False
 
-    # delivery-tag -> disposition
+    # used to provide default delivery-tag
+    self.delivery_count = 0
+
+    # delivery-tag -> (local_state, remote_state)
     self.unsettled = {}
 
     self.init()
 
-  def write_cmd(self, cmd, action=None):
-    cmd.handle = self.handle
-    self.session.write_cmd(cmd, action)
+  def opening(self):
+    return self.local_state is None and self.remote_state is ATTACHED
 
-  def done(self, cmd):
-    self.session.done(cmd)
+  def closing(self):
+    return self.remote_state is DETACHED and self.local_state is ATTACHED
 
-  def actioned(self, cmd):
-    self.session.actioned(cmd)
+  def opened(self):
+    return self.local_state is ATTACHED and self.remote_state is ATTACHED
+
+  def closed(self):
+    return self.local_state is DETACHED and self.remote_state is DETACHED
+
+  def capacity(self):
+    return self.transfer_limit - self.transfer_count
 
   def write(self, cmd):
-    return self.dispatch(cmd)
+    self.dispatch(cmd)
 
   def dispatch(self, cmd):
     return getattr(self, "do_%s" % cmd.NAME)(cmd)
 
-  def opening(self):
-    return self.links_sent < self.links_rcvd
+  def attach(self):
+    if self.local_state is ATTACHED:
+      raise LinkError("already attached")
+    self.local_state = ATTACHED
+    self.modified = True
 
-  def closing(self):
-    return self.unlinks_sent < self.unlinks_rcvd
+  def do_attach(self, attach):
+    self.remote_state = ATTACHED
+    self.remote = attach.local
+    self.do_flow(attach.flow_state)
 
-  def opened(self):
-    return self.links_rcvd == self.links_sent and self.links_sent > self.unlinks_sent
+  # XXX: closing and errors
+  def detach(self):
+    if self.local_state is not ATTACHED:
+      raise LinkError("not attached")
+    self.local_state = DETACHED
 
-  def closed(self):
-    return self.unlinks_rcvd == self.unlinks_sent and self.unlinks_sent == self.links_sent
-
-  def capacity(self):
-    return self.limit - self.count
-
-  def link(self):
-    self.write_cmd(LinkCmd(name = self.name,
-                           direction = self.direction,
-                           source = self.source,
-                           target = self.target))
-    self.links_sent += 1
-
-  def do_link(self, link_cmd):
-    if self.links_rcvd > self.unlinks_rcvd:
-      raise LinkError("double link")
+  def do_detach(self, detach):
+    if detach.closing:
+      # XXX: we should probably have a separate state for this
+      self.remote_state = None
     else:
-      if self.direction == Sender.direction:
-        self.target = link_cmd.target
-      else:
-        self.source = link_cmd.source
-      self.links_rcvd += 1
+      self.remote_state = DETACHED
 
-  def unlink(self):
-    self.write_cmd(Unlink())
-    self.unlinks_sent += 1
-    self.handle = None
+  def do_disposition(self, delivery_tag, state, settled):
+    if delivery_tag in self.unsettled:
+      local, remote = self.unsettled[delivery_tag]
+      remote.state = state
+      remote.settled = settled
+      remote.modified = True
 
-  def do_unlink(self, unlink):
-    if self.unlinks_rcvd > self.links_rcvd:
-      raise LinkError("double unlink")
-    else:
-      self.unlinks_rcvd += 1
+  def _query(self, index, settled=None, modified=None):
+    return [(delivery_tag, pair[index])
+            for delivery_tag, pair in self.unsettled.items()
+            if (settled is None or settled == pair[index].settled) and
+            (modified is None or modified == pair[index].modified)]
+
+  def get_local(self, settled=None, modified=None):
+    return self._query(0, settled, modified)
+
+  def get_remote(self, settled=None, modified=None):
+    return self._query(1, settled, modified)
+
+  def flow_state(self):
+    return FlowState(self.transfer_count, self.transfer_limit, self.attainable_limit, self.drain)
+
+  def disposition(self, delivery_tag, state=None, settled=False):
+    local, remote = self.unsettled[delivery_tag]
+    local.state = state
+    local.settled = settled
+    local.modified = True
+    # XXX
+    if local.settled and self.handle is None:
+      self.unsettled.pop(delivery_tag)
+    return local, remote
+
+  def settle(self, delivery_tag, state=None):
+    if state is None:
+      local, _ = self.unsettled[delivery_tag]
+      state = local.state
+    return self.disposition(delivery_tag, state, settled=True)
 
 class Sender(Link):
 
@@ -117,102 +162,32 @@ class Sender(Link):
 
   def init(self):
     self.outgoing = []
-    self.drains = []
 
-  def get_local(self):
-    return self.source
+  def do_flow(self, state):
+    self.transfer_limit = state.transfer_limit
+    self.drain = state.drain
 
-  def set_local(self, value):
-    self.source = value
-
-  local = property(fget=get_local, fset=set_local)
-
-  def get_remote(self):
-    return self.target
-
-  def set_remote(self, value):
-    self.target = value
-
-  remote = property(fget=get_remote, fset=set_remote)
-
-  def do_flow(self, flow):
-    if self.drains:
-      self.drains[-1][-1] = flow.limit
-    else:
-      self.limit = flow.limit
-    self.done(flow)
-
-  def do_drain(self, drain):
-    self.drains.append([drain, None])
-    if self.limit == self.count:
-      self.drain_done()
-
-  def empty(self):
-    if self.drains:
-      self.limit = self.count
-      self.drain_done()
-
-  def drain_done(self):
-    drain, limit = self.drains.pop()
-    self.done(drain)
-    if limit is not None:
-      self.limit = limit
+  def drained(self, flow=True):
+    if self.drain:
+      self.transfer_count = self.transfer_limit
+      self.modified = True
 
   def send(self, **kwargs):
-    if self.count >= self.limit:
+    if self.transfer_count >= self.transfer_limit:
       raise LinkError("would block")
+    self.transfer_count += 1
     xfr = Transfer(**kwargs)
+    # XXX: should we do this in session?
+    xfr.flow_state = self.flow_state()
     if xfr.delivery_tag is None:
-      xfr.delivery_tag = "%s:%s" % (self.link_tag, self.count)
-    self.count += 1
-    self.write_cmd(xfr, self.transferred)
+      xfr.delivery_tag = self.delivery_count
+    if not xfr.more:
+      self.delivery_count += 1
     self.outgoing.append(xfr)
-    self.unsettled[xfr.delivery_tag] = PENDING
-    if self.drains and self.limit == self.count:
-      self.drain_done()
+    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+    if self.transfer_limit == self.transfer_count:
+      self.drained(flow=False)
     return xfr.delivery_tag
-
-  def transferred(self, xfr):
-    if self.unsettled.get(xfr.delivery_tag) is PENDING:
-      self.unsettled[xfr.delivery_tag] = None
-    if xfr.delivery_tag not in self.unsettled:
-      self.actioned(xfr)
-
-  def do_disposition(self, disp):
-    on = False
-    for xfr in self.outgoing:
-      if xfr.delivery_tag == disp.first:
-        on = True
-      if on:
-        self.unsettled[xfr.delivery_tag] = disp.disposition
-      if xfr.delivery_tag == disp.last:
-        break
-    self.done(disp)
-
-  def pending(self):
-    return len([d for d in self.unsettled.values() if d is not PENDING])
-
-  def get(self):
-    if self.outgoing:
-      xfr = self.outgoing[0]
-      d = self.unsettled[xfr.delivery_tag]
-      return xfr.delivery_tag, d
-    else:
-      raise LinkError("empty")
-
-  def settle(self, delivery_tag):
-    if delivery_tag not in self.unsettled:
-      return
-    idx = 0
-    while idx < len(self.outgoing):
-      xfr = self.outgoing[idx]
-      if xfr.delivery_tag == delivery_tag:
-        del self.outgoing[idx]
-        self.unsettled.pop(xfr.delivery_tag)
-        self.actioned(xfr)
-        break
-      else:
-        idx += 1
 
 class Receiver(Link):
 
@@ -222,37 +197,23 @@ class Receiver(Link):
   def init(self):
     self.incoming = []
 
-  def get_local(self):
-    return self.target
-
-  def set_local(self, value):
-    self.target = value
-
-  local = property(fget=get_local, fset=set_local)
-
-  def get_remote(self):
-    return self.source
-
-  def set_remote(self, value):
-    self.source = value
-
-  remote = property(fget=get_remote, fset=set_remote)
-
   def do_transfer(self, xfr):
-    self.count += 1
     self.incoming.append(xfr)
-    self.unsettled[xfr.delivery_tag] = PENDING
-    return lambda id: self.unsettled.pop(xfr.delivery_tag)
+    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+    # XXX: should we do this from session?
+    self.do_flow(xfr.flow_state)
 
-  def flow(self, n):
-    self.limit += n
-    self.write_cmd(Flow(limit=self.limit))
+  def do_flow(self, state):
+    self.transfer_count = state.transfer_count
+    self.attainable_limit = state.attainable_limit
+
+  def flow(self, n, drain=False):
+    self.transfer_limit += n
+    self.drain = drain
+    self.modified = True
 
   def drain(self):
-    self.write_cmd(Drain(), self.drained)
-
-  def drained(self, drain):
-    self.limit = self.count
+    self.flow(0, True)
 
   def pending(self):
     return len(self.incoming)
@@ -263,21 +224,11 @@ class Receiver(Link):
     else:
       raise LinkError("empty")
 
-  def ack(self, xfr, **disposition):
-    self.done(xfr)
-    if disposition:
-      self.unsettled[xfr.delivery_tag] = disposition
-      self.write_cmd(Disposition(disposition=disposition,
-                                 first=xfr.delivery_tag,
-                                 last=xfr.delivery_tag))
-    else:
-      self.unsettled[xfr.delivery_tag] = None
-
 DIRECTIONS = {
   Sender.direction: Sender,
   Receiver.direction: Receiver
   }
 
-def link(link_cmd):
-  cls = DIRECTIONS[1 - link_cmd.direction]
-  return cls(link_cmd.name, link_cmd.source, link_cmd.target)
+def link(attach):
+  cls = DIRECTIONS[1 - attach.direction]
+  return cls(attach.name, attach.remote, attach.local)
