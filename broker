@@ -87,7 +87,9 @@ class Broker:
 
   def init_receiver(self, link):
     if link.remote.target in self.queues:
-      link.flow(10)
+      q = self.queues[link.remote.target]
+      if q.capacity():
+        link.flow(10)
       return True
     else:
       return False
@@ -117,12 +119,13 @@ class Broker:
         link.settle(t, "DEQUEUED")
 
   def process_receiver(self, link):
+    q = self.queues[link.local.target]
     while link.pending():
       xfr = link.get()
-      self.queues[link.local.target].put(xfr)
+      q.put(xfr)
       print "ENQUEUED:", xfr
       link.settle(xfr.delivery_tag, "ENQUEUED")
-    if link.capacity() < 10: link.flow(10)
+    if q.capacity() and link.capacity() < 10: link.flow(10)
 
 def bind(host, port):
   sock = socket.socket()
@@ -140,14 +143,22 @@ parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
+parser.add_option("-T", "--threshold", dest="thresholds", default=[],
+                  action="append", metavar="NAME=THRESHOLD",
+                  help="specify flow control threshold for a queue")
 
 opts, args = parser.parse_args()
 
 try:
   broker = Broker()
 
+  thresholds = {}
+  for value in opts.thresholds:
+    name, threshold = value.split("=", 2)
+    thresholds[name] = int(threshold)
+
   for a in args:
-    broker.queues[a] = Queue()
+    broker.queues[a] = Queue(thresholds.get(a))
 
   selector = Selector()
   sock = bind(opts.interface, opts.port)

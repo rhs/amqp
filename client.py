@@ -21,9 +21,10 @@
 import socket
 from connection import Connection as BaseConnection
 from session import Session as BaseSession, SessionError
-from link import Sender as BaseSender, Receiver as BaseReceiver, LinkError, link
+from link import Link as BaseLink, Sender as BaseSender, \
+    Receiver as BaseReceiver, LinkError, link
 from selector import Selector
-from util import ConnectionSelectable
+from util import ConnectionSelectable, Constant
 from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
@@ -31,6 +32,8 @@ from protocol import Fragment, Linkage
 
 class Timeout(Exception):
   pass
+
+DEFAULT = Constant("DEFAULT")
 
 class Connection(BaseConnection):
 
@@ -40,6 +43,7 @@ class Connection(BaseConnection):
     self.condition = Condition(self._lock)
     self.waiter = Waiter(self.condition)
     self.selector = Selector.default()
+    self.timeout = 120
 
   def connect(self, host, port):
     sock = socket.socket()
@@ -52,7 +56,9 @@ class Connection(BaseConnection):
     connection.tick()
     self.waiter.notify()
 
-  def wait(self, predicate, timeout=10):
+  def wait(self, predicate, timeout=DEFAULT):
+    if timeout is DEFAULT:
+      timeout = self.timeout
     self.selector.wakeup()
     if not self.waiter.wait(predicate, timeout):
       raise Timeout()
@@ -76,8 +82,11 @@ class Session(BaseSession):
     BaseSession.__init__(self, name, link)
     self.connection = connection
     self._lock = self.connection._lock
+    self.timeout = 120
 
-  def wait(self, predicate, timeout=10):
+  def wait(self, predicate, timeout=DEFAULT):
+    if timeout is DEFAULT:
+      self.timeout = timeout
     self.connection.wait(predicate, timeout)
 
   @synchronized
@@ -113,16 +122,27 @@ class Link:
   def __init__(self, connection):
     self.connection = connection
     self._lock = self.connection._lock
+    self.timeout = 120
 
-  def wait(self, predicate, timeout=10):
+  def wait(self, predicate, timeout=DEFAULT):
+    if timeout is DEFAULT:
+      self.timeout = timeout
     self.connection.wait(predicate, timeout)
+
+  @synchronized
+  def disposition(self, delivery_tag, state=None, settled=False):
+    BaseLink.disposition(self, delivery_tag, state, settled)
+
+  @synchronized
+  def settle(self, delivery_tag, state=None):
+    BaseLink.settle(self, delivery_tag, state)
 
   @synchronized
   def close(self):
     self.detach()
     self.wait(self.closed)
 
-class Sender(BaseSender, Link):
+class Sender(Link, BaseSender):
 
   def __init__(self, connection, target):
     BaseSender.__init__(self, str(uuid4()), Linkage(None, target))
@@ -133,7 +153,7 @@ class Sender(BaseSender, Link):
     self.wait(self.capacity)
     return BaseSender.send(self, **kwargs)
 
-class Receiver(BaseReceiver, Link):
+class Receiver(Link, BaseReceiver):
 
   def __init__(self, connection, source):
     BaseReceiver.__init__(self, str(uuid4()), Linkage(source, None))

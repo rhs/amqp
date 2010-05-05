@@ -79,5 +79,5 @@ conn.close()
 for tag, st in lnk.get_remote(settled=True):
   lnk.settle(tag)
 
-if lnk.unsettled:
-  print lnk.unsettled
+for tag, (local, remote) in lnk.unsettled.items():
+  print "UNSETTLED:", tag, local, remote

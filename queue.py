@@ -52,20 +52,27 @@ class Entry:
 
 class Queue:
 
-  def __init__(self):
+  def __init__(self, threshold=None):
     self.tail = Entry(self, None)
     self.head = self.tail
     self.head.acquire()
+    self.size = 0
+    self.threshold = threshold
+
+  def capacity(self):
+    return self.threshold == None or self.size < self.threshold
 
   def put(self, item):
     self.tail.add(item)
     self.tail = self.tail.next
+    self.size += 1
 
   def gc(self):
     entry = self.head
     while entry.next is not None and entry.next.next is not None:
       if entry.next.is_garbage():
         entry.next = entry.next.next
+        self.size -= 1
       entry = entry.next
 
   def cursor(self, mode, filter=lambda x: True):
