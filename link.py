@@ -180,7 +180,7 @@ class Sender(Link):
     # XXX: should we do this in session?
     xfr.flow_state = self.flow_state()
     if xfr.delivery_tag is None:
-      xfr.delivery_tag = self.delivery_count
+      xfr.delivery_tag = "%s" % self.delivery_count
     if not xfr.more:
       self.delivery_count += 1
     self.outgoing.append(xfr)

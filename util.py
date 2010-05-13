@@ -76,6 +76,8 @@ def load_xml(name):
   return mllib.xml_parse(xml_file)
 
 def pythonize(name, camel=False):
+  if name is None:
+    return name
   name = str(name)
   if camel:
     return "".join([p.capitalize() for p in name.split("-")])

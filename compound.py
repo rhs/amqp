@@ -18,16 +18,23 @@
 #
 
 import inspect
+from codec import Box
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name, default=None):
+  def __init__(self, name, type, required, multiple, category, default=None):
     self.name = name
+    self.type = type
+    self.required = required
+    self.multiple = multiple
+    self.category = category
     self.default = default
 
   def __repr__(self):
-    return "Field(%r, %r)" % (self.name, self.default)
+    return "Field(%r, %r, %r, %r, %r, %r)" % \
+        (self.name, self.type, self.required, self.multiple, self.category,
+         self.default)
 
 class Compound(object):
 
@@ -49,7 +56,16 @@ class Compound(object):
       raise TypeError("got unexpected keyword argument '%s'" % kwargs.keys()[0])
 
   def deconstruct(self):
-    return [getattr(self, f.name) for f in self.ENCODED_FIELDS]
+    return [self.deconstruct_field(f) for f in self.ENCODED_FIELDS]
+
+  def deconstruct_field(self, field):
+    value = getattr(self, field.name)
+    if value is None:
+      if field.required:
+        raise ValueError("%s: field %s is required" % (self, field.name))
+    elif field.type is not None and field.category != "compound":
+      value = Box(field.type, value)
+    return value
 
   def _args(self):
     args = []
@@ -62,9 +78,27 @@ class Compound(object):
   def __repr__(self):
     return "%s(%s)" % (self.__class__.__name__, ", ".join(self._args()))
 
+def resolve(name, aliases):
+  while name in aliases:
+    name = aliases[name]
+  return name
+
 def load_compound(types, *default_bases, **kwargs):
-  result = []
+  aliases = {"*": None}
+  classes = {}
+  compound = []
   for nd in types:
+    name = nd["@name"]
+    cls = nd["@class"]
+    classes[name] = cls
+    if cls == "restricted":
+      aliases[name] = nd["@source"]
+    elif cls == "compound":
+      compound.append(nd)
+
+  result = []
+
+  for nd in compound:
     archetype = pythonize(nd["@provides"])
     cls_name = pythonize(nd["@name"], camel=True)
     if cls_name in kwargs:
@@ -78,7 +112,12 @@ def load_compound(types, *default_bases, **kwargs):
     dict["NAME"] = pythonize(nd["@name"])
     dict["DESCRIPTORS"] = (str(nd["descriptor/@name"]),
                            decode_numeric_desc(nd["descriptor/@code"]))
-    encoded = [Field(pythonize(f["@name"])) for f in nd.query["field"]]
+    encoded = [Field(pythonize(f["@name"]),
+                     pythonize(resolve(f["@type"], aliases)),
+                     f["@required"] == "true",
+                     f["@multiple"] == "true",
+                     pythonize(classes.get(f["@type"])))
+               for f in nd.query["field"]]
     dict["ENCODED_FIELDS"] = encoded
     fields = encoded + \
         [f

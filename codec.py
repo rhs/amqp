@@ -66,6 +66,15 @@ class Box:
   def __repr__(self):
     return "Box(%r, %r)" % (self.type, self.value)
 
+class Described:
+
+  def __init__(self, descriptor, value):
+    self.descriptor = descriptor
+    self.value = value
+
+  def __repr__(self):
+    return "Described(%r, %r)" % (self.descriptor, self.value)
+
 class Symbol:
 
   def __init__(self, name):
@@ -91,8 +100,11 @@ class TypeEncoder:
       if not (hasattr(self, "enc_%s" % enc.type)):
         raise ValueError("no encoder for encoding: %s" % enc)
     self.encoders = {
+      Box: self.enc_box,
       bool: self.enc_boolean,
-      int: self.enc_int,
+      int: self.enc_long, # the boundary between int and long is
+                          # platform specific, so we treat them the
+                          # same to avoid platform dependencies
       long: self.enc_long,
       float: self.enc_double, # python floats are actually doubles
       dict: self.enc_map,
@@ -108,7 +120,7 @@ class TypeEncoder:
       None.__class__: self.enc_null
       }
     self.deconstructors = {
-      Box: lambda v: (v.type, v.value)
+      Described: lambda v: (v.descriptor, v.value)
       }
 
   def deconstruct(self, value):
@@ -132,6 +144,13 @@ class TypeEncoder:
       bytes = ""
     assert len(bytes) == enc.width
     return struct.pack("!B", enc.code) + bytes
+
+  def enc_box(self, b):
+    encoder = getattr(self, "enc_%s" % b.type, None)
+    if encoder:
+      return encoder(b.value)
+    else:
+      raise ValueError("unknown type: %s" % b.type)
 
   def enc_null(self, n):
     return self.enc_fixed("null")
@@ -227,17 +246,17 @@ class TypeDecoder:
   def __init__(self, encodings=ENCODINGS):
     self.decoders = {}
     for enc in encodings:
-      self.decoders[enc.code] = getattr(self, "dec_%s" % enc.name)
+      self.decoders[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
     self.constructors = {
       UNDESCRIBED: lambda d, v: v
       }
 
   def construct(self, descriptor, value):
-    constructor = self.constructors.get(descriptor, Box)
+    constructor = self.constructors.get(descriptor, Described)
     return constructor(descriptor, value)
 
   def decode(self, bytes):
-    descriptor, decoder, bytes = self.dec_type(bytes)
+    descriptor, (encoding, decoder), bytes = self.dec_type(bytes)
     value, bytes = decoder(bytes)
     return self.construct(descriptor, value), bytes
 
@@ -249,7 +268,6 @@ class TypeDecoder:
     code, bytes = self.unpack("!B", bytes)
     if code == 0:
       descriptor, bytes = self.decode(bytes)
-      # XXX: can this be another described type?
       code, bytes = self.unpack("!B", bytes)
     else:
       descriptor = UNDESCRIBED

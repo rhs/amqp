@@ -52,6 +52,14 @@ class Connection(BaseConnection):
     self.selector.register(ConnectionSelectable(sock, self, self._tick))
 
   @synchronized
+  def open(self, **kwargs):
+    if "container_id" not in kwargs:
+      kwargs["container_id"] = str(uuid4())
+    if "channel_max" not in kwargs:
+      kwargs["channel_max"] = 65535
+    BaseConnection.open(self, **kwargs)
+
+  @synchronized
   def _tick(self, connection):
     connection.tick()
     self.waiter.notify()

@@ -204,7 +204,10 @@ class Session:
       for r in ranges:
         ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
         extents.append(ext)
-      self.post_frame(Disposition(direction=l.direction, extents=extents))
+      self.post_frame(Disposition(direction=l.direction,
+                                  settled=direction.unsettled_lwm,
+                                  unsettled_limit = direction.unsettled_lwm + 65536,
+                                  extents=extents))
 
 class DeliveryMap:
 

@@ -17,6 +17,7 @@
 # under the License.
 #
 
+from codec import TYPES as TYPES_DOC
 from compound import Compound, load_compound
 from util import load_xml
 
@@ -24,9 +25,8 @@ class Body(Compound):
   pass
 
 TRANSPORT = load_xml("transport.xml")
-def equals(attr, value):
-  return lambda nd: nd[attr] == value
-TYPES = TRANSPORT.query["amqp/section/type", equals("@class", "compound")]
+TYPES = TYPES_DOC.query["amqp/section/type"] + \
+    TRANSPORT.query["amqp/section/type"]
 CLASSES = load_compound(TYPES, Compound, frame=Body)
 
 __all__ = ["CLASSES"]

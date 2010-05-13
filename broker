@@ -27,7 +27,8 @@ from util import ConnectionSelectable
 
 class Broker:
 
-  def __init__(self):
+  def __init__(self, container_id):
+    self.container_id = container_id
     self.queues = {}
     self.cursors = {}
     self.init = {Sender.direction: self.init_sender,
@@ -37,7 +38,8 @@ class Broker:
 
   def tick(self, connection):
     if connection.opening():
-      connection.open()
+      connection.open(container_id = self.container_id,
+                      channel_max = 65535)
 
     # XXX
     for ssn in connection.incoming.values():
@@ -139,6 +141,8 @@ parser = optparse.OptionParser(usage="usage: %prog [options] QUEUE_1 ... QUEUE_n
                                description="Prototype amqp broker.")
 parser.add_option("-i", "--interface", default="0.0.0.0",
                   help="interface to listen on (default %default)")
+parser.add_option("-c", "--container", default=socket.gethostname(),
+                  help="container-id for the broker (default %default)")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
 parser.add_option("-t", "--trace", default="err",
@@ -150,7 +154,7 @@ parser.add_option("-T", "--threshold", dest="thresholds", default=[],
 opts, args = parser.parse_args()
 
 try:
-  broker = Broker()
+  broker = Broker(opts.container)
 
   thresholds = {}
   for value in opts.thresholds:
