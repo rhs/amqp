@@ -58,9 +58,9 @@ class Link(object):
     self.remote_state = None
 
     # flow state
-    self.transfer_count = 0
-    self.transfer_limit = 0
-    self.attainable_limit = 0
+    self.transfer_count = None
+    self.link_credit = 0
+    self.available = 0
     self.drain = False
     self.modified = False
 
@@ -85,7 +85,7 @@ class Link(object):
     return self.local_state is DETACHED and self.remote_state is DETACHED
 
   def capacity(self):
-    return self.transfer_limit - self.transfer_count
+    return self.link_credit
 
   def write(self, cmd):
     self.dispatch(cmd)
@@ -111,11 +111,8 @@ class Link(object):
     self.local_state = DETACHED
 
   def do_detach(self, detach):
-    if detach.closing:
-      # XXX: we should probably have a separate state for this
-      self.remote_state = None
-    else:
-      self.remote_state = DETACHED
+    self.remote_state = DETACHED
+    self.remote = detach.local
 
   def do_disposition(self, delivery_tag, state, settled):
     if delivery_tag in self.unsettled:
@@ -137,7 +134,10 @@ class Link(object):
     return self._query(1, settled, modified)
 
   def flow_state(self):
-    return FlowState(self.transfer_count, self.transfer_limit, self.attainable_limit, self.drain)
+    return FlowState(transfer_count = self.transfer_count,
+                     link_credit = self.link_credit,
+                     available = self.available,
+                     drain = self.drain)
 
   def disposition(self, delivery_tag, state=None, settled=False):
     local, remote = self.unsettled[delivery_tag]
@@ -155,27 +155,36 @@ class Link(object):
       state = local.state
     return self.disposition(delivery_tag, state, settled=True)
 
+
 class Sender(Link):
 
   # XXX
   direction = 1
+  initial_count = 0
 
   def init(self):
+    self.transfer_count = self.initial_count
     self.outgoing = []
 
   def do_flow(self, state):
-    self.transfer_limit = state.transfer_limit
+    if state.transfer_count is None:
+      receiver_count = self.initial_count
+    else:
+      receiver_count = state.transfer_count
+    self.link_credit = receiver_count + state.link_credit - self.transfer_count
     self.drain = state.drain
 
-  def drained(self, flow=True):
+  def drained(self):
     if self.drain:
-      self.transfer_count = self.transfer_limit
+      self.transfer_count += self.link_credit
+      self.link_credit = 0
       self.modified = True
 
   def send(self, **kwargs):
-    if self.transfer_count >= self.transfer_limit:
+    if self.link_credit <= 0:
       raise LinkError("would block")
     self.transfer_count += 1
+    self.link_credit -= 1
     xfr = Transfer(**kwargs)
     # XXX: should we do this in session?
     xfr.flow_state = self.flow_state()
@@ -185,8 +194,6 @@ class Sender(Link):
       self.delivery_count += 1
     self.outgoing.append(xfr)
     self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
-    if self.transfer_limit == self.transfer_count:
-      self.drained(flow=False)
     return xfr.delivery_tag
 
 class Receiver(Link):
@@ -204,11 +211,15 @@ class Receiver(Link):
     self.do_flow(xfr.flow_state)
 
   def do_flow(self, state):
+    if self.transfer_count is None:
+      self.link_credit = state.link_credit
+    else:
+      self.link_credit -= state.transfer_count - self.transfer_count
     self.transfer_count = state.transfer_count
-    self.attainable_limit = state.attainable_limit
+    self.available = state.available
 
   def flow(self, n, drain=False):
-    self.transfer_limit += n
+    self.link_credit += n
     self.drain = drain
     self.modified = True
 

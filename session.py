@@ -51,8 +51,8 @@ class Session:
 
     self.output = []
 
-  def write(self, op):
-    self.dispatch(op)
+  def write(self, body):
+    self.dispatch(body)
 
   # XXX: dup of read in framing
   def read(self, n=None):
@@ -60,12 +60,12 @@ class Session:
     del self.output[:n]
     return result
 
-  def dispatch(self, op):
-    getattr(self, "do_%s" % op.NAME)(op)
+  def dispatch(self, body):
+    getattr(self, "do_%s" % body.NAME)(body)
 
-  def post_frame(self, op):
+  def post_frame(self, body):
     assert self.begin_sent and not self.end_sent
-    self.output.append(op)
+    self.output.append(body)
 
   def beginning(self):
     return self.begin_rcvd and not self.begin_sent
@@ -155,7 +155,7 @@ class Session:
         link.handle = self.allocate_handle()
         self.post_frame(Attach(name = link.name,
                                handle = link.handle,
-                               flow_state = link.flow_state(),
+                               flow_state = self.flow_state(link),
                                direction = link.direction,
                                local = link.local,
                                remote = link.remote))
@@ -168,17 +168,30 @@ class Session:
           self.post_frame(Detach(handle=link.handle))
           link.handle = None
 
+  def flow_state(self, link):
+    state = link.flow_state()
+    self.session_flow(state)
+    return state
+
+  def session_flow(self, state):
+    state.unsettled_lwm = self.outgoing.unsettled_lwm
+    state.session_credit = 65536
+
   def process_link(self, l):
     # XXX
     if l.direction == Sender.direction:
       while l.outgoing:
         xfr = l.outgoing.pop(0)
         xfr.handle = l.handle
+        self.session_flow(xfr.flow_state)
         self.outgoing.append(l, xfr)
         self.post_frame(xfr)
 
-    if l.modified:
-      self.post_frame(Flow(handle=l.handle, flow_state=l.flow_state()))
+    # we don't send flow state until the transfer_count is
+    # initialized, this ensures an unambiguous calculation of the
+    # initial transfer_count
+    if l.modified and l.transfer_count is not None:
+      self.post_frame(Flow(handle=l.handle, flow_state=self.flow_state(l)))
       l.modified = False
 
     states = {}
@@ -204,10 +217,7 @@ class Session:
       for r in ranges:
         ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
         extents.append(ext)
-      self.post_frame(Disposition(direction=l.direction,
-                                  settled=direction.unsettled_lwm,
-                                  unsettled_limit = direction.unsettled_lwm + 65536,
-                                  extents=extents))
+      self.post_frame(Disposition(direction=l.direction, extents=extents))
 
 class DeliveryMap:
 
