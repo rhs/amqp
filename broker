@@ -31,10 +31,10 @@ class Broker:
     self.container_id = container_id
     self.queues = {}
     self.cursors = {}
-    self.init = {Sender.direction: self.init_sender,
-                 Receiver.direction: self.init_receiver}
-    self.process = {Sender.direction:self.process_sender,
-                    Receiver.direction: self.process_receiver}
+    self.init = {Sender.role: self.init_sender,
+                 Receiver.role: self.init_receiver}
+    self.process = {Sender.role: self.process_sender,
+                    Receiver.role: self.process_receiver}
 
   def tick(self, connection):
     if connection.opening():
@@ -49,7 +49,7 @@ class Broker:
     for ssn in connection.outgoing.values():
       for link in ssn.links.values():
         if link.opening():
-          if self.init[link.direction](link):
+          if self.init[link.role](link):
             link.local = link.remote
             link.attach()
           else:
@@ -61,7 +61,7 @@ class Broker:
 
         # XXX
         if link.local:
-          self.process[link.direction](link)
+          self.process[link.role](link)
 
         if link.closing():
           link.detach()
@@ -168,7 +168,7 @@ try:
   sock = bind(opts.interface, opts.port)
 
   def handler(accepted):
-    conn = Connection(lambda n: Session(n, link))
+    conn = Connection(lambda properties: Session(link, properties))
     conn.tracing = set(opts.trace.split())
     selector.register(ConnectionSelectable(accepted, conn, broker.tick))
 

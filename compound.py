@@ -23,17 +23,17 @@ from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name, type, required, multiple, category, default=None):
+  def __init__(self, name, type, mandatory, multiple, category, default=None):
     self.name = name
     self.type = type
-    self.required = required
+    self.mandatory = mandatory
     self.multiple = multiple
     self.category = category
     self.default = default
 
   def __repr__(self):
     return "Field(%r, %r, %r, %r, %r, %r)" % \
-        (self.name, self.type, self.required, self.multiple, self.category,
+        (self.name, self.type, self.mandatory, self.multiple, self.category,
          self.default)
 
 class Compound(object):
@@ -61,8 +61,8 @@ class Compound(object):
   def deconstruct_field(self, field):
     value = getattr(self, field.name)
     if value is None:
-      if field.required:
-        raise ValueError("%s: field %s is required" % (self, field.name))
+      if field.mandatory:
+        raise ValueError("%s: field %s is mandatory" % (self, field.name))
     elif field.type is not None and field.category != "compound":
       value = Box(field.type, value)
     return value
@@ -114,7 +114,7 @@ def load_compound(types, *default_bases, **kwargs):
                            decode_numeric_desc(nd["descriptor/@code"]))
     encoded = [Field(pythonize(f["@name"]),
                      pythonize(resolve(f["@type"], aliases)),
-                     f["@required"] == "true",
+                     f["@mandatory"] == "true",
                      f["@multiple"] == "true",
                      pythonize(classes.get(f["@type"])))
                for f in nd.query["field"]]

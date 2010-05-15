@@ -27,9 +27,9 @@ class SessionError(Exception):
 
 class Session:
 
-  def __init__(self, name, factory):
-    self.name = name
+  def __init__(self, factory, properties=None):
     self.factory = factory
+    self.properties = properties
     self.remote_channel = None
     self.channel = None
 
@@ -40,9 +40,8 @@ class Session:
 
     self.incoming = Incoming()
     self.outgoing = Outgoing()
-    self.directions = {}
-    self.directions[Sender.direction] = self.outgoing
-    self.directions[Receiver.direction] = self.incoming
+    self.roles = {Sender.role: self.outgoing,
+                  Receiver.role: self.incoming}
 
     # link name -> link endpoint
     self.links = {}
@@ -78,7 +77,7 @@ class Session:
       raise SessionError("already begun")
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
-                          name = self.name))
+                          properties = self.properties))
 
   def do_begin(self, begin):
     self.begin_rcvd = True
@@ -132,12 +131,11 @@ class Session:
 
   def do_disposition(self, disp):
     if disp.extents:
-      # XXX
-      direction = self.directions[1 - disp.direction]
+      role = self.roles[not disp.role]
       for e in disp.extents:
-        start = max(direction.unsettled_lwm, e.first)
+        start = max(role.unsettled_lwm, e.first)
         for id in range(start, e.last+1):
-          delivery = direction.get_delivery(id)
+          delivery = role.get_delivery(id)
           if delivery:
             link, tag = delivery
             link.do_disposition(tag, e.state, e.settled)
@@ -156,7 +154,7 @@ class Session:
         self.post_frame(Attach(name = link.name,
                                handle = link.handle,
                                flow_state = self.flow_state(link),
-                               direction = link.direction,
+                               role = link.role,
                                local = link.local,
                                remote = link.remote))
         link.modified = False
@@ -179,7 +177,7 @@ class Session:
 
   def process_link(self, l):
     # XXX
-    if l.direction == Sender.direction:
+    if l.role == Sender.role:
       while l.outgoing:
         xfr = l.outgoing.pop(0)
         xfr.handle = l.handle
@@ -197,8 +195,8 @@ class Session:
     states = {}
 
     for dtag, local in l.get_local(modified=True):
-      direction = self.directions[l.direction]
-      ids = direction.transfers[(l, dtag)]
+      role = self.roles[l.role]
+      ids = role.transfers[(l, dtag)]
       if local in states:
         ranges = states[local]
       else:
@@ -208,7 +206,7 @@ class Session:
         ranges.add_range(r)
 
       if local.settled:
-        direction.settle(l, dtag)
+        role.settle(l, dtag)
         l.unsettled.pop(dtag)
       local.modified = False
 
@@ -217,7 +215,7 @@ class Session:
       for r in ranges:
         ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
         extents.append(ext)
-      self.post_frame(Disposition(direction=l.direction, extents=extents))
+      self.post_frame(Disposition(role=l.role, extents=extents))
 
 class DeliveryMap:
 

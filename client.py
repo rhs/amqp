@@ -71,10 +71,8 @@ class Connection(BaseConnection):
     if not self.waiter.wait(predicate, timeout):
       raise Timeout()
 
-  def session(self, name = None):
-    if name is None:
-      name = str(uuid4())
-    ssn = Session(self, name)
+  def session(self):
+    ssn = Session(self)
     self.add(ssn)
     ssn.begin()
     return ssn
@@ -86,8 +84,8 @@ class Connection(BaseConnection):
 
 class Session(BaseSession):
 
-  def __init__(self, connection, name):
-    BaseSession.__init__(self, name, link)
+  def __init__(self, connection):
+    BaseSession.__init__(self, link)
     self.connection = connection
     self._lock = self.connection._lock
     self.timeout = 120

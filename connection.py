@@ -185,7 +185,7 @@ class Connection:
     if begin.remote_channel in self.outgoing:
       ssn = self.outgoing[begin.remote_channel]
     else:
-      ssn = self.factory(begin.name)
+      ssn = self.factory(begin.properties)
       ssn.remote_channel = channel
       self.add(ssn)
 

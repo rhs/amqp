@@ -159,7 +159,7 @@ class Link(object):
 class Sender(Link):
 
   # XXX
-  direction = 1
+  role = False
   initial_count = 0
 
   def init(self):
@@ -199,7 +199,7 @@ class Sender(Link):
 class Receiver(Link):
 
   # XXX
-  direction = 0
+  role = True
 
   def init(self):
     self.incoming = []
@@ -235,11 +235,11 @@ class Receiver(Link):
     else:
       raise LinkError("empty")
 
-DIRECTIONS = {
-  Sender.direction: Sender,
-  Receiver.direction: Receiver
+ROLES = {
+  Sender.role: Sender,
+  Receiver.role: Receiver
   }
 
 def link(attach):
-  cls = DIRECTIONS[1 - attach.direction]
+  cls = ROLES[not attach.role]
   return cls(attach.name, attach.remote, attach.local)
