@@ -135,8 +135,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="handle" class="restricted" source="uint"/>
     <type name="linkage" class="compound" source="list">
       <descriptor name="amqp:linkage:list" code="0x00000001:0x00000109"/>
-      <field name="source" type="*"/>
-      <field name="target" type="*"/>
+      <field name="source" type="*" requires="source"/>
+      <field name="target" type="*" requires="target"/>
     </type>
     <type name="link-expiry-policy" class="restricted" source="symbol">
       <choice name="session" value="session"/>
@@ -146,7 +146,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="seconds" class="restricted" source="uint"/>
     <type name="flow-state" class="compound" source="list">
       <descriptor name="amqp:flow-state:list" code="0x00000001:0x0000010a"/>
-      <field name="unsettled-lwm" type="transfer-number" mandatory="true"/>
+      <field name="unsettled-lwm" type="transfer-number"/>
       <field name="session-credit" type="uint" mandatory="true"/>
       <field name="transfer-count" type="sequence-no"/>
       <field name="link-credit" type="uint"/>
@@ -162,7 +162,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="last" type="transfer-number"/>
       <field name="handle" type="uint"/>
       <field name="settled" type="boolean"/>
-      <field name="state" type="*"/>
+      <field name="state" type="*" requires="transfer-state"/>
     </type>
     <type name="fragment" class="compound" source="list">
       <descriptor name="amqp:fragment:list" code="0x00000001:0x0000010c"/>

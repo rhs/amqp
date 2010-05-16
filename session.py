@@ -172,7 +172,7 @@ class Session:
     return state
 
   def session_flow(self, state):
-    state.unsettled_lwm = self.outgoing.unsettled_lwm
+    state.unsettled_lwm = self.incoming.unsettled_lwm
     state.session_credit = 65536
 
   def process_link(self, l):
