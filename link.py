@@ -17,8 +17,7 @@
 # under the License.
 #
 
-from protocol import Attach, Detach, Transfer, Disposition, Flow, FlowState, \
-    Extent
+from protocol import Transfer, FlowState
 from util import Constant
 from uuid import uuid4
 
