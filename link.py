@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from protocol import Transfer, FlowState
+from protocol import Transfer
 from util import Constant
 from uuid import uuid4
 
@@ -83,9 +83,6 @@ class Link(object):
   def closed(self):
     return self.local_state is DETACHED and self.remote_state is DETACHED
 
-  def capacity(self):
-    return self.link_credit
-
   def write(self, cmd):
     self.dispatch(cmd)
 
@@ -132,12 +129,6 @@ class Link(object):
   def get_remote(self, settled=None, modified=None):
     return self._query(1, settled, modified)
 
-  def flow_state(self):
-    return FlowState(transfer_count = self.transfer_count,
-                     link_credit = self.link_credit,
-                     available = self.available,
-                     drain = self.drain)
-
   def disposition(self, delivery_tag, state=None, settled=False):
     local, remote = self.unsettled[delivery_tag]
     local.state = state
@@ -173,20 +164,19 @@ class Sender(Link):
     self.link_credit = receiver_count + state.link_credit - self.transfer_count
     self.drain = state.drain
 
+  def capacity(self):
+    return self.link_credit - len(self.outgoing)
+
   def drained(self):
     if self.drain:
-      self.transfer_count += self.link_credit
-      self.link_credit = 0
+      self.transfer_count += self.capacity()
+      self.link_credit = len(self.outgoing)
       self.modified = True
 
   def send(self, **kwargs):
-    if self.link_credit <= 0:
+    if self.capacity() <= 0:
       raise LinkError("would block")
-    self.transfer_count += 1
-    self.link_credit -= 1
     xfr = Transfer(**kwargs)
-    # XXX: should we do this in session?
-    xfr.flow_state = self.flow_state()
     if xfr.delivery_tag is None:
       xfr.delivery_tag = "%s" % self.delivery_count
     if not xfr.more:
@@ -194,6 +184,15 @@ class Sender(Link):
     self.outgoing.append(xfr)
     self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
     return xfr.delivery_tag
+
+  def pending(self):
+    return len(self.outgoing)
+
+  def pop(self):
+    xfr = self.outgoing.pop(0)
+    self.transfer_count += 1
+    self.link_credit -= 1
+    return xfr
 
 class Receiver(Link):
 
@@ -216,6 +215,9 @@ class Receiver(Link):
       self.link_credit -= state.transfer_count - self.transfer_count
     self.transfer_count = state.transfer_count
     self.available = state.available
+
+  def capacity(self):
+    return self.link_credit
 
   def flow(self, n, drain=False):
     self.link_credit += n

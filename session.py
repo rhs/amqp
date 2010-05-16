@@ -18,8 +18,8 @@
 #
 
 from link import ATTACHED, DETACHED, Sender, Receiver
-from protocol import Begin, Attach, Flow, Transfer, Disposition, Extent, \
-    Detach, End
+from protocol import Begin, Attach, Flow, FlowState, Transfer, Disposition, \
+    Extent, Detach, End
 from util import RangeSet
 
 class SessionError(Exception):
@@ -167,21 +167,20 @@ class Session:
           link.handle = None
 
   def flow_state(self, link):
-    state = link.flow_state()
-    self.session_flow(state)
-    return state
-
-  def session_flow(self, state):
-    state.unsettled_lwm = self.incoming.unsettled_lwm
-    state.session_credit = 65536
+    return FlowState(unsettled_lwm = self.incoming.unsettled_lwm,
+                     session_credit = 65536,
+                     transfer_count = link.transfer_count,
+                     link_credit = link.link_credit,
+                     available = link.available,
+                     drain = link.drain)
 
   def process_link(self, l):
     # XXX
     if l.role == Sender.role:
-      while l.outgoing:
-        xfr = l.outgoing.pop(0)
+      while l.pending():
+        xfr = l.pop()
         xfr.handle = l.handle
-        self.session_flow(xfr.flow_state)
+        xfr.flow_state = self.flow_state(l)
         self.outgoing.append(l, xfr)
         self.post_frame(xfr)
 
