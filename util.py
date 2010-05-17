@@ -127,9 +127,15 @@ class ConnectionSelectable:
     self.socket = None
 
   def writeable(self):
-    # XXX: error handling
-    n = self.socket.send(self.connection.peek())
-    bytes = self.connection.read(n)
+    try:
+      n = self.socket.send(self.connection.peek())
+      bytes = self.connection.read(n)
+      return
+    except:
+      self.connection.trace("err", traceback.format_exc().strip())
+    self.socket.close()
+    # XXX: need to unregister
+    self.socket = None
 
 class Range:
 
