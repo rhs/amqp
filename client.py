@@ -19,10 +19,10 @@
 #
 
 import socket
-from connection import Connection as BaseConnection
-from session import Session as BaseSession, SessionError
-from link import Link as BaseLink, Sender as BaseSender, \
-    Receiver as BaseReceiver, LinkError, link
+from connection import Connection as ProtoConnection
+from session import Session as ProtoSession, SessionError
+from link import Link as ProtoLink, Sender as ProtoSender, \
+    Receiver as ProtoReceiver, LinkError, link
 from selector import Selector
 from util import ConnectionSelectable, Constant
 from concurrency import synchronized, Condition, Waiter
@@ -35,21 +35,46 @@ class Timeout(Exception):
 
 DEFAULT = Constant("DEFAULT")
 
-class Connection(BaseConnection):
+class Connection:
 
   def __init__(self):
-    BaseConnection.__init__(self, self.session)
+    self.proto = ProtoConnection(self.session)
     self._lock = RLock()
     self.condition = Condition(self._lock)
     self.waiter = Waiter(self.condition)
     self.selector = Selector.default()
     self.timeout = 120
 
+  def trace(self, *args, **kwargs):
+    self.proto.trace(*args, **kwargs)
+
+  @synchronized
   def connect(self, host, port):
     sock = socket.socket()
     sock.connect((host, port))
     sock.setblocking(0)
-    self.selector.register(ConnectionSelectable(sock, self, self._tick))
+    self.selector.register(ConnectionSelectable(sock, self, self.tick))
+
+  @synchronized
+  def pending(self):
+    return self.proto.pending()
+
+  @synchronized
+  def peek(self, n=None):
+    return self.proto.peek(n)
+
+  @synchronized
+  def read(self, n=None):
+    return self.proto.read(n)
+
+  @synchronized
+  def write(self, bytes):
+    self.proto.write(bytes)
+
+  @synchronized
+  def tick(self, connection):
+    self.proto.tick()
+    self.waiter.notify()
 
   @synchronized
   def open(self, **kwargs):
@@ -57,12 +82,7 @@ class Connection(BaseConnection):
       kwargs["container_id"] = str(uuid4())
     if "channel_max" not in kwargs:
       kwargs["channel_max"] = 65535
-    BaseConnection.open(self, **kwargs)
-
-  @synchronized
-  def _tick(self, connection):
-    connection.tick()
-    self.waiter.notify()
+    self.proto.open(**kwargs)
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
@@ -71,24 +91,25 @@ class Connection(BaseConnection):
     if not self.waiter.wait(predicate, timeout):
       raise Timeout()
 
+  @synchronized
   def session(self):
     ssn = Session(self)
-    self.add(ssn)
-    ssn.begin()
+    self.proto.add(ssn.proto)
     return ssn
 
   @synchronized
   def close(self):
-    BaseConnection.close(self)
-    self.wait(lambda: self.close_rcvd)
+    self.proto.close()
+    self.wait(lambda: self.proto.close_rcvd)
 
-class Session(BaseSession):
+class Session:
 
   def __init__(self, connection):
-    BaseSession.__init__(self, link)
+    self.proto = ProtoSession(link)
     self.connection = connection
     self._lock = self.connection._lock
     self.timeout = 120
+    self.proto.begin()
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
@@ -98,10 +119,10 @@ class Session(BaseSession):
   @synchronized
   def sender(self, target):
     snd = Sender(self.connection, target)
-    self.add(snd)
-    snd.attach()
-    self.wait(lambda: snd.opened() or snd.closing())
-    if snd.remote is None:
+    self.proto.add(snd.proto)
+    snd.proto.attach()
+    self.wait(lambda: snd.proto.opened() or snd.proto.closing())
+    if snd.proto.remote is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
     return snd
@@ -109,19 +130,19 @@ class Session(BaseSession):
   @synchronized
   def receiver(self, source, limit=0, drain=False):
     rcv = Receiver(self.connection, source)
-    self.add(rcv)
-    rcv.attach()
+    self.proto.add(rcv.proto)
+    rcv.proto.attach()
     if limit:
       rcv.flow(limit, drain=drain)
-    self.wait(lambda: rcv.opened() or rcv.closing())
-    if rcv.remote is None:
+    self.wait(lambda: rcv.proto.opened() or rcv.proto.closing())
+    if rcv.proto.remote is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     return rcv
 
   @synchronized
   def close(self):
-    self.end()
+    self.proto.end()
 
 class Link:
 
@@ -136,49 +157,73 @@ class Link:
     self.connection.wait(predicate, timeout)
 
   @synchronized
+  def get_unsettled(self):
+    return dict(self.proto.unsettled)
+
+  @synchronized
+  def get_remote(self, *args, **kwargs):
+    return self.proto.get_remote(*args, **kwargs)
+
+  @synchronized
+  def get_local(self, *args, **kwargs):
+    return self.proto.get_local(*args, **kwargs)
+
+  @synchronized
+  def capacity(self):
+    return self.proto.capacity()
+
+  @synchronized
   def disposition(self, delivery_tag, state=None, settled=False):
-    BaseLink.disposition(self, delivery_tag, state, settled)
+    self.proto.disposition(delivery_tag, state, settled)
 
   @synchronized
   def settle(self, delivery_tag, state=None):
-    BaseLink.settle(self, delivery_tag, state)
+    self.proto.settle(delivery_tag, state)
 
   @synchronized
   def close(self):
-    self.detach()
-    self.wait(self.closed)
+    self.proto.detach()
+    self.wait(self.proto.closed)
 
-class Sender(Link, BaseSender):
+class Sender(Link):
 
   def __init__(self, connection, target):
-    BaseSender.__init__(self, str(uuid4()), Linkage(None, target))
     Link.__init__(self, connection)
+    self.proto = ProtoSender(str(uuid4()), Linkage(None, target))
 
   @synchronized
   def send(self, **kwargs):
     self.wait(self.capacity)
-    return BaseSender.send(self, **kwargs)
+    return self.proto.send(**kwargs)
 
-class Receiver(Link, BaseReceiver):
+class Receiver(Link):
 
   def __init__(self, connection, source):
-    BaseReceiver.__init__(self, str(uuid4()), Linkage(source, None))
     Link.__init__(self, connection)
+    self.proto = ProtoReceiver(str(uuid4()), Linkage(source, None))
+
+  @synchronized
+  def flow(self, limit, drain=False):
+    self.proto.flow(limit, drain)
 
   @synchronized
   def pending(self, block=False, timeout=None):
     if block:
       self.wait(self._pending_unblocked, timeout)
-    return BaseReceiver.pending(self)
+    return self.proto.pending()
 
   def _pending_unblocked(self):
-    return self.capacity() == 0 or BaseReceiver.pending(self) > 0
+    return self.capacity() == 0 or self.proto.pending() > 0
 
   @synchronized
   def draining(self, block=False, timeout=None):
     if block:
       self.wait(self._draining_unblocked, timeout)
-    return BaseReceiver.draining(self)
+    return self.proto.draining()
 
   def _draining_unblocked(self):
-    return BaseReceiver.draining(self)
+    return self.proto.draining()
+
+  @synchronized
+  def get(self):
+    return self.proto.get()

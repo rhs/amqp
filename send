@@ -69,5 +69,5 @@ lnk.close()
 ssn.close()
 conn.close()
 
-if lnk.unsettled:
-  print lnk.unsettled
+for tag, (local, remote) in lnk.get_unsettled().items():
+  print "UNSETTLED:", tag, local, remote
