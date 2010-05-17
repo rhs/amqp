@@ -45,6 +45,9 @@ class Connection:
     self.selector = Selector.default()
     self.timeout = 120
 
+  def tracing(self, *args, **kwargs):
+    self.proto.tracing(*args, **kwargs)
+
   def trace(self, *args, **kwargs):
     self.proto.trace(*args, **kwargs)
 

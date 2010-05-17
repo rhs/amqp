@@ -38,7 +38,8 @@ class Connection:
   def __init__(self, factory):
     self.id = "%X" % id(self)
     self.factory = factory
-    self.tracing = set(os.environ.get("AMQP_TRACE", "err").split())
+    self._tracing = set()
+    self.tracing(*os.environ.get("AMQP_TRACE", "").split())
     self.input = Buffer()
     self.output = Buffer(struct.pack(PROTO_HDR_FMT, "AMQP", 0, 1, 0, 0))
 
@@ -65,8 +66,16 @@ class Connection:
     # outgoing channel -> session
     self.outgoing = {}
 
+  def tracing(self, *args, **kwargs):
+    names = set(args)
+    for n in kwargs:
+      if kwargs[n]: names.add(n)
+    if "err" not in kwargs:
+      names.add("err")
+    self._tracing = names
+
   def trace(self, category, format, *args):
-    if category in self.tracing:
+    if category in self._tracing:
       prefix = "[%s %s]" % (self.id, category)
       if args:
         message = format % args

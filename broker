@@ -169,7 +169,7 @@ try:
 
   def handler(accepted):
     conn = Connection(lambda properties: Session(link, properties))
-    conn.tracing = set(opts.trace.split())
+    conn.tracing(*opts.trace.split())
     selector.register(ConnectionSelectable(accepted, conn, broker.tick))
 
   selector.register(Acceptor(sock, handler))
