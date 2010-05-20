@@ -17,20 +17,43 @@
 # under the License.
 #
 
-NON_DESTRUCTIVE = "NON_DESTRUCTIVE"
-DESTRUCTIVE = "DESTRUCTIVE"
+from util import Constant
+
+HEAD = Constant("HEAD")
+TAIL = Constant("TAIL")
 
 class Entry:
 
-  def __init__(self, queue, item):
-    self.queue = queue
+  def __init__(self, item):
     self.item = item
     self.next = None
+    self.prev = None
     self.acquired = False
 
-  def add(self, item):
-    assert self.next is None
-    self.next = Entry(self.queue, item)
+  def tail(self):
+    return self.item is TAIL
+
+  def head(self):
+    return self.item is HEAD
+
+  def insert(self, item):
+    entry = Entry(item)
+    next = self.next
+    entry.next = next
+    if next:
+      next.prev = entry
+    entry.prev = self
+    self.next = entry
+    return entry
+
+  def remove(self):
+    next = self.next
+    prev = self.prev
+
+    if next:
+      next.prev = prev
+    if prev:
+      prev.next = next
 
   def acquire(self):
     if self.acquired:
@@ -39,22 +62,14 @@ class Entry:
       self.acquired = True
       return True
 
-  def dequeue(self):
-    self.item = None
-    self.queue.gc()
-
-  def is_garbage(self):
-    return self.item == None
-
   def __repr__(self):
     return "Entry(acquired=%r, item=%r)" % (self.acquired, self.item)
 
 class Queue:
 
   def __init__(self, threshold=None):
-    self.tail = Entry(self, None)
-    self.head = self.tail
-    self.head.acquire()
+    self.head = Entry(HEAD)
+    self.tail = self.head.insert(TAIL)
     self.size = 0
     self.threshold = threshold
 
@@ -62,20 +77,14 @@ class Queue:
     return self.threshold == None or self.size < self.threshold
 
   def put(self, item):
-    self.tail.add(item)
-    self.tail = self.tail.next
+    self.tail.prev.insert(item)
     self.size += 1
 
-  def gc(self):
-    entry = self.head
-    while entry.next is not None and entry.next.next is not None:
-      if entry.next.is_garbage():
-        entry.next = entry.next.next
-        self.size -= 1
-      entry = entry.next
+  def source(self):
+    return Source(self.head.next)
 
-  def cursor(self, mode, filter=lambda x: True):
-    return Cursor(self, mode, filter)
+  def target(self):
+    return Target(self)
 
   def __repr__(self):
     entries = []
@@ -85,63 +94,46 @@ class Queue:
       e = e.next
     return repr(entries)
 
-class Cursor:
+class Source:
 
-  def __init__(self, queue, mode, filter):
+  def __init__(self, next):
+    self.next = next
+    self.unacked = {}
+    self.tag = 0
+
+  def get(self):
+    while self.next.acquired:
+      self.next = self.next.next
+
+    entry = self.next
+    if entry.tail():
+      return None, None
+    self.next = self.next.next
+    entry.acquire()
+
+    self.tag += 1
+    tag = str(self.tag)
+    self.unacked[tag] = entry
+
+    return tag, entry.item
+
+  def settle(self, tag, outcome):
+    entry = self.unacked.pop(tag)
+    entry.remove()
+    print "DEQUEUED:", tag, outcome
+    return "DEQUEUED"
+
+class Target:
+
+  def __init__(self, queue):
     self.queue = queue
-    self.mode = mode
-    self.filter = filter
-    self.head = self.queue.head
 
-  def get(self, peek=False):
-    e = self.head
-    result = None
-    while e.next is not None:
-      e = e.next
-      if not e.is_garbage() and not e.acquired and self.filter(e.item):
-        # XXX
-        if (self.mode == NON_DESTRUCTIVE or
-            (peek and not e.acquired) or
-            (not peek and e.acquire())):
-          result = e
-          break
-    if not peek:
-      self.head = e
-    return result
+  def capacity(self):
+    return self.queue.capacity()
 
-  def peek(self):
-    return self.get(peek=True)
+  def put(self, tag, message):
+    self.queue.put(message)
+    print "ENQUEUED:", tag, message.fragments
 
-  def close(self):
-    # XXX: TODO
-    pass
-
-  def __repr__(self):
-    return "Cursor(mode=%r, filter=%r, head=%r)" % \
-        (self.mode, self.filter, self.head)
-
-if __name__ == '__main__':
-  q = Queue()
-
-  q.put(1)
-  q.put(2)
-  q.put(3)
-
-  c1 = q.cursor(DESTRUCTIVE, lambda x: x == 1)
-  c2 = q.cursor(DESTRUCTIVE, lambda x: x == 2)
-  c3 = q.cursor(DESTRUCTIVE, lambda x: x == 3)
-
-  e2 = c2.get()
-  print e2, c2, q
-  e2.dequeue()
-  print e2, c2, q
-
-  e3 = c3.get()
-  print e3, c3, q
-  e3.dequeue()
-  print e3, c3, q
-
-  e1 = c1.get()
-  print e1, c1, q
-  e1.dequeue()
-  print e1, c1, q
+  def settle(self, tag):
+    return "ENQUEUED"
