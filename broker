@@ -139,6 +139,8 @@ parser.add_option("-i", "--interface", default="0.0.0.0",
                   help="interface to listen on (default %default)")
 parser.add_option("-c", "--container", default=socket.gethostname(),
                   help="container-id for the broker (default %default)")
+parser.add_option("-n", "--nodes", default=[], action="append",
+                  help="load nodes from specified file")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
 parser.add_option("-t", "--trace", default="err",
@@ -156,6 +158,15 @@ try:
   for value in opts.thresholds:
     name, threshold = value.split("=", 2)
     thresholds[name] = int(threshold)
+
+  nodes = {}
+  for n in opts.nodes:
+    exec open(n) in globals(), nodes
+
+  for name, value in nodes.items():
+    if name.startswith("_"):
+      continue
+    broker.nodes[name] = value
 
   for a in args:
     broker.nodes[a] = Queue(thresholds.get(a))
