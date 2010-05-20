@@ -45,6 +45,9 @@ Files:
 
   connection.py  -- An implementation of an AMQP connection endpoint.
 
+  example-nodes  -- Example node configurations for use with the -n
+                    option of the broker.
+
   framing.py     -- An implementation of the AMQP framing layer.
 
   link.py        -- An implementation of an AMQP link endpoint.
