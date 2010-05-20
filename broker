@@ -22,15 +22,17 @@ from connection import Connection
 from session import Session, SessionError
 from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
-from queue import Queue, DESTRUCTIVE
+from queue import Queue
 from util import ConnectionSelectable
 
 class Broker:
 
   def __init__(self, container_id):
     self.container_id = container_id
-    self.queues = {}
-    self.cursors = {}
+    self.nodes = {}
+    self.sources = {}
+    self.targets = {}
+
     self.init = {Sender.role: self.init_sender,
                  Receiver.role: self.init_receiver}
     self.process = {Sender.role: self.process_sender,
@@ -79,55 +81,49 @@ class Broker:
     connection.tick()
 
   def init_sender(self, link):
-    if link.remote.source in self.queues:
-      q = self.queues[link.remote.source]
-      cursor = q.cursor(DESTRUCTIVE)
-      self.cursors[link] = cursor, {}
+    if link.remote.source in self.nodes:
+      n = self.nodes[link.remote.source]
+      source = n.source()
+      self.sources[link] = source
       return True
     else:
       return False
 
   def init_receiver(self, link):
-    if link.remote.target in self.queues:
-      q = self.queues[link.remote.target]
-      if q.capacity():
+    if link.remote.target in self.nodes:
+      n = self.nodes[link.remote.target]
+      target = n.target()
+      self.targets[link] = target
+      if target.capacity():
         link.flow(10)
       return True
     else:
       return False
 
   def process_sender(self, link):
-    cursor, unacked = self.cursors[link]
+    source = self.sources[link]
     while link.capacity() > 0:
-      entry = cursor.get()
-      if entry is None:
+      tag, xfr = source.get()
+      if xfr is None:
         link.drained()
         break
-      elif entry.item is None:
-        continue
       else:
-        xfr = entry.item
-        tag = link.send(fragments = xfr.fragments)
-        print "TRANSFER:", tag, xfr
-        unacked[tag] = entry
+        link.send(delivery_tag = tag, fragments = xfr.fragments)
+        print "TRANSFER:", tag, xfr.fragments
 
     for t, r in link.get_remote():
       if r.settled or r.state is not None:
-        e = unacked[t]
-        xfr = e.item
-        e.dequeue()
-        print "DEQUEUED:", t, r
-        del unacked[t]
-        link.settle(t, "DEQUEUED")
+        state = source.settle(t, r.state)
+        link.settle(t, state)
 
   def process_receiver(self, link):
-    q = self.queues[link.local.target]
+    target = self.targets[link]
     while link.pending():
       xfr = link.get()
-      q.put(xfr)
-      print "ENQUEUED:", xfr
-      link.settle(xfr.delivery_tag, "ENQUEUED")
-    if q.capacity() and link.capacity() < 10: link.flow(10)
+      target.put(xfr.delivery_tag, xfr)
+      state = target.settle(xfr.delivery_tag)
+      link.settle(xfr.delivery_tag, state)
+    if target.capacity() and link.capacity() < 10: link.flow(10)
 
 def bind(host, port):
   sock = socket.socket()
@@ -162,7 +158,7 @@ try:
     thresholds[name] = int(threshold)
 
   for a in args:
-    broker.queues[a] = Queue(thresholds.get(a))
+    broker.nodes[a] = Queue(thresholds.get(a))
 
   selector = Selector()
   sock = bind(opts.interface, opts.port)
