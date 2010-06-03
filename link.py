@@ -71,6 +71,8 @@ class Link(object):
 
     self.init()
 
+  # XXX: should update these to use local and remote and/or add
+  # versions for attaching/detaching
   def opening(self):
     return self.local_state is None and self.remote_state is ATTACHED
 
@@ -105,6 +107,10 @@ class Link(object):
     if self.local_state is not ATTACHED:
       raise LinkError("not attached")
     self.local_state = DETACHED
+
+  def close(self):
+    self.local = None
+    self.detach()
 
   def do_detach(self, detach):
     self.remote_state = DETACHED

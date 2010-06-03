@@ -122,6 +122,7 @@ class ConnectionSelectable:
         return
     except:
       self.connection.trace("err", traceback.format_exc().strip())
+      # XXX: need to signal connection so it can cleanup links
     self.socket.close()
     # XXX: need to unregister
     self.socket = None
@@ -133,6 +134,7 @@ class ConnectionSelectable:
       return
     except:
       self.connection.trace("err", traceback.format_exc().strip())
+      # XXX: need to signal connection so it can cleanup links
     self.socket.close()
     # XXX: need to unregister
     self.socket = None

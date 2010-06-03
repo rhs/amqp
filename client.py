@@ -120,8 +120,8 @@ class Session:
     self.connection.wait(predicate, timeout)
 
   @synchronized
-  def sender(self, target):
-    snd = Sender(self.connection, target)
+  def sender(self, target, name=None):
+    snd = Sender(self.connection, name or str(uuid4()), target)
     self.proto.add(snd.proto)
     snd.proto.attach()
     self.wait(lambda: snd.proto.opened() or snd.proto.closing())
@@ -131,8 +131,8 @@ class Session:
     return snd
 
   @synchronized
-  def receiver(self, source, limit=0, drain=False):
-    rcv = Receiver(self.connection, source)
+  def receiver(self, source, limit=0, drain=False, name=None):
+    rcv = Receiver(self.connection, name or str(uuid4()), source)
     self.proto.add(rcv.proto)
     rcv.proto.attach()
     if limit:
@@ -184,15 +184,21 @@ class Link:
     self.proto.settle(delivery_tag, state)
 
   @synchronized
-  def close(self):
+  def detach(self):
     self.proto.detach()
+    # XXX
+    self.wait(self.proto.closed)
+
+  @synchronized
+  def close(self):
+    self.proto.close()
     self.wait(self.proto.closed)
 
 class Sender(Link):
 
-  def __init__(self, connection, target):
+  def __init__(self, connection, name, target):
     Link.__init__(self, connection)
-    self.proto = ProtoSender(str(uuid4()), Linkage(None, target))
+    self.proto = ProtoSender(name, Linkage(None, target))
 
   @synchronized
   def send(self, **kwargs):
@@ -201,9 +207,9 @@ class Sender(Link):
 
 class Receiver(Link):
 
-  def __init__(self, connection, source):
+  def __init__(self, connection, name, source):
     Link.__init__(self, connection)
-    self.proto = ProtoReceiver(str(uuid4()), Linkage(source, None))
+    self.proto = ProtoReceiver(name, Linkage(source, None))
 
   @synchronized
   def flow(self, limit, drain=False):

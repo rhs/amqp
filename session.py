@@ -163,7 +163,9 @@ class Session:
         self.process_link(link)
 
         if link.local_state is DETACHED:
-          self.post_frame(Detach(handle=link.handle))
+          self.post_frame(Detach(handle=link.handle,
+                                 local=link.local,
+                                 remote=link.remote))
           link.handle = None
 
   def flow_state(self, link):

@@ -27,6 +27,9 @@ parser.add_option("-H", "--host",
                   help="host to connect to (default 0.0.0.0)")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to connect to (default %default)")
+parser.add_option("-l", "--link", help="link name")
+parser.add_option("-d", "--detach", action="store_true",
+                  help="detach rather than close link")
 parser.add_option("-b", "--block", action="store_true",
                   help="block until messages arrive")
 parser.add_option("-c", "--count", type=int, default=1,
@@ -51,7 +54,7 @@ if opts.count:
   credit = min(10, opts.count)
 else:
   credit = 10
-lnk = ssn.receiver(addr, limit=credit, drain=not opts.block)
+lnk = ssn.receiver(addr, limit=credit, drain=not opts.block, name=opts.link)
 
 count = 0
 try:
@@ -71,7 +74,10 @@ try:
 except KeyboardInterrupt:
   pass
 
-lnk.close()
+if opts.detach:
+  lnk.detach()
+else:
+  lnk.close()
 ssn.close()
 conn.close()
 

@@ -33,10 +33,12 @@ class Broker:
     self.sources = {}
     self.targets = {}
 
-    self.init = {Sender.role: self.init_sender,
-                 Receiver.role: self.init_receiver}
+    self.attach = {Sender.role: self.attach_sender,
+                   Receiver.role: self.attach_receiver}
     self.process = {Sender.role: self.process_sender,
                     Receiver.role: self.process_receiver}
+    self.detach = {Sender.role: self.detach_sender,
+                   Receiver.role: self.detach_receiver}
 
   def tick(self, connection):
     if connection.opening():
@@ -51,7 +53,7 @@ class Broker:
     for ssn in connection.outgoing.values():
       for link in ssn.links.values():
         if link.opening():
-          if self.init[link.role](link):
+          if self.attach[link.role](link):
             link.local = link.remote
             link.attach()
           else:
@@ -69,6 +71,7 @@ class Broker:
           link.detach()
 
         if link.closed():
+          self.detach[link.role](link)
           ssn.remove(link)
 
       if ssn.ending():
@@ -80,20 +83,28 @@ class Broker:
 
     connection.tick()
 
-  def init_sender(self, link):
-    if link.remote.source in self.nodes:
+  def attach_sender(self, link):
+    if link.name in self.sources:
+      source = self.sources[link.name]
+      source.resume(link.unsettled or {})
+      return True
+    elif link.remote.source in self.nodes:
       n = self.nodes[link.remote.source]
       source = n.source()
-      self.sources[link] = source
+      self.sources[link.name] = source
       return True
     else:
       return False
 
-  def init_receiver(self, link):
-    if link.remote.target in self.nodes:
+  def attach_receiver(self, link):
+    if link.name in self.targets:
+      target = self.sources[link.name]
+      target.resume(link.unsettled or {})
+      return True
+    elif link.remote.target in self.nodes:
       n = self.nodes[link.remote.target]
       target = n.target()
-      self.targets[link] = target
+      self.targets[link.name] = target
       if target.capacity():
         link.flow(10)
       return True
@@ -101,7 +112,7 @@ class Broker:
       return False
 
   def process_sender(self, link):
-    source = self.sources[link]
+    source = self.sources[link.name]
     while link.capacity() > 0:
       tag, xfr = source.get()
       if xfr is None:
@@ -117,13 +128,23 @@ class Broker:
         link.settle(t, state)
 
   def process_receiver(self, link):
-    target = self.targets[link]
+    target = self.targets[link.name]
     while link.pending():
       xfr = link.get()
       target.put(xfr.delivery_tag, xfr)
       state = target.settle(xfr.delivery_tag)
       link.settle(xfr.delivery_tag, state)
     if target.capacity() and link.capacity() < 10: link.flow(10)
+
+  def detach_sender(self, link):
+    if link.remote is None:
+      source = self.sources.pop(link.name)
+      source.close()
+
+  def detach_receiver(self, link):
+    if link.remote is None:
+      target = self.targets.pop(link.name)
+      target.close()
 
 def bind(host, port):
   sock = socket.socket()

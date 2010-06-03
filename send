@@ -27,6 +27,9 @@ parser.add_option("-H", "--host",
                   help="host to connect to (default 0.0.0.0)")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to connect to (default %default)")
+parser.add_option("-l", "--link", help="link name")
+parser.add_option("-d", "--detach", action="store_true",
+                  help="detach rather than close link")
 parser.add_option("-c", "--count", type=int, default=1,
                   help="number of messages to send (default %default)")
 parser.add_option("-i", "--stdin", action="store_true",
@@ -47,7 +50,7 @@ conn.tracing(*opts.trace.split())
 conn.connect(host, opts.port)
 conn.open()
 ssn = conn.session()
-lnk = ssn.sender(addr)
+lnk = ssn.sender(addr, name=opts.link)
 
 count = 0
 try:
@@ -65,7 +68,10 @@ try:
 except KeyboardInterrupt:
   pass
 
-lnk.close()
+if opts.detach:
+  lnk.detach()
+else:
+  lnk.close()
 ssn.close()
 conn.close()
 

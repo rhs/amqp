@@ -23,18 +23,19 @@ TAIL = Constant("TAIL")
 
 class Entry:
 
-  def __init__(self, queue, item):
+  def __init__(self, queue, id, item):
     self.queue = queue
+    self.id = id
     self.item = item
     self.next = None
-    self.acquired = False
+    self.acquired = None
 
   def tail(self):
     return self.item is TAIL
 
   def append(self, item):
     assert self.next is None
-    self.next = Entry(self.queue, item)
+    self.next = Entry(self.queue, self.queue.identify(), item)
     self.queue.size += 1
     return self.next
 
@@ -43,26 +44,37 @@ class Entry:
     self.queue.size -= 1
     self.queue.compact()
 
-  def acquire(self):
-    if self.acquired:
-      return False
-    else:
-      self.acquired = True
-      return True
+  def acquire(self, owner):
+    if not self.acquired:
+      self.acquired = owner
+    return self.acquired
+
+  def release(self):
+    self.acquired = None
+
+  def __del__(self):
+    if self.item is not None:
+      self.queue.size -= 1
 
   def __repr__(self):
-    return "Entry(acquired=%r, item=%r)" % (self.acquired, self.item)
+    return "Entry(id=%s, item=%r, %s)" % (self.id, self.item, self.acquired)
 
 class Queue:
 
   def __init__(self, threshold=None, ring=None, acquire=True, dequeue=True):
-    self.tail = Entry(self, TAIL)
+    self.next_id = 0
+    self.tail = Entry(self, self.identify(), TAIL)
     self.head = self.tail
     self.size = 0
     self.threshold = threshold
     self.ring = ring
     self.acquire = acquire
     self.dequeue = dequeue
+
+  def identify(self):
+    id = self.next_id
+    self.next_id += 1
+    return id
 
   def capacity(self):
     return self.threshold == None or self.size < self.threshold
@@ -99,25 +111,36 @@ class Source:
     self.acquire = acquire
     self.dequeue = dequeue
     self.unacked = {}
-    self.tag = 0
 
   def get(self):
-    if self.acquire:
-      while self.next.item is None or self.next.acquired:
-        self.next = self.next.next
+    while (self.next.next and
+           (self.next.item is None or
+            (self.acquire and self.next.acquire(self) != self))):
+      self.next = self.next.next
 
     entry = self.next
     if entry.tail():
       return None, None
     self.next = self.next.next
-    if self.acquire:
-      entry.acquire()
 
-    self.tag += 1
-    tag = str(self.tag)
+    if self.acquire:
+      assert entry.acquired == self
+
+    tag = str(entry.id)
     self.unacked[tag] = entry
 
     return tag, entry.item
+
+  def resume(self, unsettled):
+    for tag, state in unsettled.items():
+      self.settle(tag, state)
+    oldest = self.next
+    for entry in self.unacked.values():
+      if entry.id < oldest.id:
+        oldest = entry
+    print "RESUME: %s -> %s" % (self.next.id, oldest.id)
+    self.next = oldest
+    # XXX: clear unacked?
 
   def settle(self, tag, outcome):
     entry = self.unacked.pop(tag)
@@ -125,6 +148,11 @@ class Source:
       entry.remove()
       print "DEQUEUED:", tag, outcome
       return "DEQUEUED"
+
+  def close(self):
+    for tag in self.unacked.keys():
+      # XXX: default outcome
+      self.settle(tag, None)
 
 class Target:
 
@@ -140,3 +168,7 @@ class Target:
 
   def settle(self, tag):
     return "ENQUEUED"
+
+  def close(self):
+    # XXX: ???
+    pass
