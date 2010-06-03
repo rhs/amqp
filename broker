@@ -106,7 +106,7 @@ class Broker:
       target = n.target()
       self.targets[link.name] = target
       if target.capacity():
-        link.flow(10)
+        link.flow(20)
       return True
     else:
       return False
@@ -120,9 +120,8 @@ class Broker:
         break
       else:
         link.send(delivery_tag = tag, fragments = xfr.fragments)
-        print "TRANSFER:", tag, xfr.fragments
 
-    for t, r in link.get_remote():
+    for t, _, r in link.get_remote():
       if r.settled or r.state is not None:
         state = source.settle(t, r.state)
         link.settle(t, state)

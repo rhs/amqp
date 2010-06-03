@@ -99,12 +99,14 @@ class Link(object):
     self.session.post_frame(body)
 
   def flow_state(self):
-    return FlowState(unsettled_lwm = self.session.incoming.unsettled_lwm,
-                     session_credit = 65536,
-                     transfer_count = self.transfer_count,
-                     link_credit = self.link_credit,
-                     available = self.available,
-                     drain = self.drain)
+    state = FlowState(unsettled_lwm = self.session.incoming.unsettled_lwm,
+                      session_credit = 65536,
+                      transfer_count = self.transfer_count,
+                      link_credit = self.link_credit,
+                      available = self.available,
+                      drain = self.drain)
+    self.echo = False
+    return state
 
   def attach(self):
     if self.attach_sent:
@@ -152,7 +154,7 @@ class Link(object):
     self.echo = self.echo or flow.echo
 
   def _query(self, index, settled=None, modified=None):
-    return [(delivery_tag, pair[index])
+    return [(delivery_tag, pair[0], pair[1])
             for delivery_tag, pair in self.unsettled.items()
             if (settled is None or settled == pair[index].settled) and
             (modified is None or modified == pair[index].modified)]
@@ -188,12 +190,13 @@ class Link(object):
     # initial transfer_count
     if self.echo and self.transfer_count is not None:
       self.post_frame(Flow(flow_state=self.flow_state()))
-      self.echo = False
 
+    role = self.session.roles[self.role]
     states = {}
 
-    for dtag, local in self.get_local(modified=True):
-      role = self.session.roles[self.role]
+    for dtag, local, remote in self.get_local(modified=True):
+      if remote.settled:
+        continue
       ids = role.transfers[(self, dtag)]
       if local in states:
         ranges = states[local]
@@ -223,7 +226,6 @@ class Sender(Link):
 
   def init(self):
     self.transfer_count = self.initial_count
-    self.outgoing = []
 
   def do_flow_state(self, state):
     if state.transfer_count is None:
@@ -253,7 +255,8 @@ class Sender(Link):
 
     xfr.flow_state = self.flow_state()
     self.session.outgoing.append(self, xfr)
-    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+    if not xfr.settled:
+      self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state))
     self.post_frame(xfr)
 
     return xfr.delivery_tag

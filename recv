@@ -82,7 +82,7 @@ ssn.close()
 conn.close()
 
 # XXX
-for tag, st in lnk.get_remote(settled=True):
+for tag, _, _ in lnk.get_remote(settled=True):
   lnk.settle(tag)
 
 for tag, (local, remote) in lnk.get_unsettled().items():

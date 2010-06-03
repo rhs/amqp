@@ -63,7 +63,7 @@ try:
     else:
       content = " ".join(args[1:])
 
-    lnk.settle(lnk.send(fragments=[Fragment(True, True, 0, 0, content)]))
+    lnk.send(settled=True, fragments=[Fragment(True, True, 0, 0, content)])
     count += 1
 except KeyboardInterrupt:
   pass
