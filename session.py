@@ -17,9 +17,8 @@
 # under the License.
 #
 
-from link import ATTACHED, DETACHED, Sender, Receiver
-from protocol import Begin, Attach, Flow, FlowState, Transfer, Disposition, \
-    Extent, Detach, End
+from link import Sender, Receiver
+from protocol import Begin, End
 from util import RangeSet
 
 class SessionError(Exception):
@@ -60,7 +59,11 @@ class Session:
     return result
 
   def dispatch(self, body):
-    getattr(self, "do_%s" % body.NAME)(body)
+    getattr(self, "do_%s" % body.NAME, self.unhandled)(body)
+
+  def unhandled(self, body):
+    link = self.handles[body.handle]
+    link.write(body)
 
   def post_frame(self, body):
     assert self.begin_sent and not self.end_sent
@@ -103,10 +106,11 @@ class Session:
   def remove(self, link):
     # process any outstanding work before removing
     self.tick()
+    if link.handle is not None:
+      raise SessionError("link is attached")
     if link.name in self.links and self.links[link.name] == link:
       del self.links[link.name]
       link.session = None
-      link.handle = None
     else:
       raise SessionError("no such link")
 
@@ -123,14 +127,12 @@ class Session:
     self.handles[attach.handle] = link
     link.write(attach)
 
-  def do_flow(self, flow):
-    link = self.handles[flow.handle]
-    link.do_flow(flow.flow_state)
+  def do_detach(self, detach):
+    if detach.handle not in self.handles:
+      raise SessionError("double detach")
 
-  def do_transfer(self, xfr):
-    link = self.handles[xfr.handle]
-    self.incoming.append(link, xfr)
-    link.write(xfr)
+    link = self.handles.pop(detach.handle)
+    link.write(detach)
 
   def do_disposition(self, disp):
     if disp.extents:
@@ -143,83 +145,9 @@ class Session:
             link, tag = delivery
             link.do_disposition(tag, e.state, e.settled)
 
-  def do_detach(self, detach):
-    if detach.handle not in self.handles:
-      raise SessionError("double detach")
-
-    link = self.handles.pop(detach.handle)
-    link.write(detach)
-
   def tick(self):
     for link in self.links.values():
-      if (link.modified or link.local_state is ATTACHED) and link.handle is None:
-        link.handle = self.allocate_handle()
-        self.post_frame(Attach(name = link.name,
-                               handle = link.handle,
-                               flow_state = self.flow_state(link),
-                               role = link.role,
-                               local = link.local,
-                               remote = link.remote))
-        link.modified = False
-
-      if link.handle is not None:
-        self.process_link(link)
-
-        if link.local_state is DETACHED:
-          self.post_frame(Detach(handle=link.handle,
-                                 local=link.local,
-                                 remote=link.remote))
-          link.handle = None
-
-  def flow_state(self, link):
-    return FlowState(unsettled_lwm = self.incoming.unsettled_lwm,
-                     session_credit = 65536,
-                     transfer_count = link.transfer_count,
-                     link_credit = link.link_credit,
-                     available = link.available,
-                     drain = link.drain)
-
-  def process_link(self, l):
-    # XXX
-    if l.role == Sender.role:
-      while l.pending():
-        xfr = l.pop()
-        xfr.handle = l.handle
-        xfr.flow_state = self.flow_state(l)
-        self.outgoing.append(l, xfr)
-        self.post_frame(xfr)
-
-    # we don't send flow state until the transfer_count is
-    # initialized, this ensures an unambiguous calculation of the
-    # initial transfer_count
-    if l.modified and l.transfer_count is not None:
-      self.post_frame(Flow(handle=l.handle, flow_state=self.flow_state(l)))
-      l.modified = False
-
-    states = {}
-
-    for dtag, local in l.get_local(modified=True):
-      role = self.roles[l.role]
-      ids = role.transfers[(l, dtag)]
-      if local in states:
-        ranges = states[local]
-      else:
-        ranges = RangeSet()
-        states[local] = ranges
-      for r in ids:
-        ranges.add_range(r)
-
-      if local.settled:
-        role.settle(l, dtag)
-        l.unsettled.pop(dtag)
-      local.modified = False
-
-    for local, ranges in states.items():
-      extents = []
-      for r in ranges:
-        ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
-        extents.append(ext)
-      self.post_frame(Disposition(role=l.role, extents=extents))
+      link.tick()
 
 class DeliveryMap:
 

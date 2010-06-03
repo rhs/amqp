@@ -121,9 +121,9 @@ class Connection:
     self.trace("frm", "RECV[%s]: %s", f.channel, body)
     getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
 
-  def unhandled(self, channel, op):
+  def unhandled(self, channel, body):
     ssn = self.incoming[channel]
-    ssn.write(op)
+    ssn.write(body)
 
   def read(self, n=None):
     self.tick()

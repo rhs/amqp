@@ -134,9 +134,9 @@ class Session:
   def receiver(self, source, limit=0, drain=False, name=None):
     rcv = Receiver(self.connection, name or str(uuid4()), source)
     self.proto.add(rcv.proto)
-    rcv.proto.attach()
     if limit:
       rcv.flow(limit, drain=drain)
+    rcv.proto.attach()
     self.wait(lambda: rcv.proto.opened() or rcv.proto.closing())
     if rcv.proto.remote is None:
       rcv.close()

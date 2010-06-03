@@ -17,8 +17,9 @@
 # under the License.
 #
 
-from protocol import Transfer
-from util import Constant
+from protocol import Attach, Flow, FlowState, Transfer, Disposition, Extent, \
+    Detach
+from util import Constant, RangeSet
 from uuid import uuid4
 
 class LinkError(Exception):
@@ -40,9 +41,6 @@ class State:
   def __repr__(self):
     return "State(%s, %s, %s)" % (self.state, self.settled, self.modified)
 
-ATTACHED = Constant("ATTACHED")
-DETACHED = Constant("DETACHED")
-
 class Link(object):
 
   def __init__(self, name, local, remote=None):
@@ -53,16 +51,17 @@ class Link(object):
     self.session = None
     self.handle = None
 
-    # local and remote state can be None, ATTACHED, DETACHED
-    self.local_state = None
-    self.remote_state = None
+    self.attach_sent = False
+    self.attach_rcvd = False
+    self.detach_sent = False
+    self.detach_rcvd = False
 
     # flow state
     self.transfer_count = None
     self.link_credit = 0
     self.available = 0
     self.drain = False
-    self.modified = False
+    self.echo = False
 
     # used to provide default delivery-tag
     self.delivery_count = 0
@@ -72,49 +71,73 @@ class Link(object):
 
     self.init()
 
-  # XXX: should update these to use local and remote and/or add
-  # versions for attaching/detaching
+  def capacity(self):
+    return self.link_credit
+
+  # XXX: should update the naming
   def opening(self):
-    return self.local_state is None and self.remote_state is ATTACHED
+    return self.attach_rcvd and not self.attach_sent
 
   def closing(self):
-    return self.remote_state is DETACHED and self.local_state is ATTACHED
+    return self.detach_rcvd and not self.detach_sent
 
   def opened(self):
-    return self.local_state is ATTACHED and self.remote_state is ATTACHED
+    return self.attach_sent and self.attach_rcvd
 
   def closed(self):
-    return self.local_state is DETACHED and self.remote_state is DETACHED
+    return self.detach_sent and self.detach_rcvd
 
-  def write(self, cmd):
-    self.dispatch(cmd)
+  def write(self, body):
+    self.dispatch(body)
 
-  def dispatch(self, cmd):
-    return getattr(self, "do_%s" % cmd.NAME)(cmd)
+  def dispatch(self, body):
+    return getattr(self, "do_%s" % body.NAME)(body)
+
+  def post_frame(self, body):
+    assert self.attach_sent and not self.detach_sent
+    body.handle = self.handle
+    self.session.post_frame(body)
+
+  def flow_state(self):
+    return FlowState(unsettled_lwm = self.session.incoming.unsettled_lwm,
+                     session_credit = 65536,
+                     transfer_count = self.transfer_count,
+                     link_credit = self.link_credit,
+                     available = self.available,
+                     drain = self.drain)
 
   def attach(self):
-    if self.local_state is ATTACHED:
+    if self.attach_sent:
       raise LinkError("already attached")
-    self.local_state = ATTACHED
-    self.modified = True
+    self.handle = self.session.allocate_handle()
+    self.attach_sent = True
+    self.post_frame(Attach(name = self.name,
+                           flow_state = self.flow_state(),
+                           role = self.role,
+                           local = self.local,
+                           remote = self.remote))
 
   def do_attach(self, attach):
-    self.remote_state = ATTACHED
+    self.attach_rcvd = True
     self.remote = attach.local
-    self.do_flow(attach.flow_state)
+    self.do_flow_state(attach.flow_state)
 
   # XXX: closing and errors
   def detach(self):
-    if self.local_state is not ATTACHED:
+    if self.detach_sent:
       raise LinkError("not attached")
-    self.local_state = DETACHED
+    # process any outstanding work before detaching
+    self.tick()
+    self.post_frame(Detach(local=self.local, remote=self.remote))
+    self.detach_sent = True
+    self.handle = None
 
   def close(self):
     self.local = None
     self.detach()
 
   def do_detach(self, detach):
-    self.remote_state = DETACHED
+    self.detach_rcvd = True
     self.remote = detach.local
 
   def do_disposition(self, delivery_tag, state, settled):
@@ -123,6 +146,10 @@ class Link(object):
       remote.state = state
       remote.settled = settled
       remote.modified = True
+
+  def do_flow(self, flow):
+    self.do_flow_state(flow.flow_state)
+    self.echo = self.echo or flow.echo
 
   def _query(self, index, settled=None, modified=None):
     return [(delivery_tag, pair[index])
@@ -152,6 +179,41 @@ class Link(object):
       state = local.state
     return self.disposition(delivery_tag, state, settled=True)
 
+  def tick(self):
+    if self.handle is None:
+      return
+
+    # we don't send flow state until the transfer_count is
+    # initialized, this ensures an unambiguous calculation of the
+    # initial transfer_count
+    if self.echo and self.transfer_count is not None:
+      self.post_frame(Flow(flow_state=self.flow_state()))
+      self.echo = False
+
+    states = {}
+
+    for dtag, local in self.get_local(modified=True):
+      role = self.session.roles[self.role]
+      ids = role.transfers[(self, dtag)]
+      if local in states:
+        ranges = states[local]
+      else:
+        ranges = RangeSet()
+        states[local] = ranges
+      for r in ids:
+        ranges.add_range(r)
+
+      if local.settled:
+        role.settle(self, dtag)
+        self.unsettled.pop(dtag)
+      local.modified = False
+
+    for local, ranges in states.items():
+      extents = []
+      for r in ranges:
+        ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
+        extents.append(ext)
+      self.session.post_frame(Disposition(role=self.role, extents=extents))
 
 class Sender(Link):
 
@@ -163,7 +225,7 @@ class Sender(Link):
     self.transfer_count = self.initial_count
     self.outgoing = []
 
-  def do_flow(self, state):
+  def do_flow_state(self, state):
     if state.transfer_count is None:
       receiver_count = self.initial_count
     else:
@@ -171,35 +233,30 @@ class Sender(Link):
     self.link_credit = receiver_count + state.link_credit - self.transfer_count
     self.drain = state.drain
 
-  def capacity(self):
-    return self.link_credit - len(self.outgoing)
-
   def drained(self):
     if self.drain:
-      self.transfer_count += self.capacity()
-      self.link_credit = len(self.outgoing)
-      self.modified = True
+      self.transfer_count += self.link_credit
+      self.link_credit = 0
+      self.post_frame(Flow(flow_state=self.flow_state()))
 
   def send(self, **kwargs):
-    if self.capacity() <= 0:
+    if self.link_credit <= 0:
       raise LinkError("would block")
     xfr = Transfer(**kwargs)
     if xfr.delivery_tag is None:
       xfr.delivery_tag = "%s" % self.delivery_count
     if not xfr.more:
       self.delivery_count += 1
-    self.outgoing.append(xfr)
-    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
-    return xfr.delivery_tag
 
-  def pending(self):
-    return len(self.outgoing)
-
-  def pop(self):
-    xfr = self.outgoing.pop(0)
     self.transfer_count += 1
     self.link_credit -= 1
-    return xfr
+
+    xfr.flow_state = self.flow_state()
+    self.session.outgoing.append(self, xfr)
+    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+    self.post_frame(xfr)
+
+    return xfr.delivery_tag
 
 class Receiver(Link):
 
@@ -210,12 +267,12 @@ class Receiver(Link):
     self.incoming = []
 
   def do_transfer(self, xfr):
+    self.session.incoming.append(self, xfr)
     self.incoming.append(xfr)
     self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
-    # XXX: should we do this from session?
-    self.do_flow(xfr.flow_state)
+    self.do_flow_state(xfr.flow_state)
 
-  def do_flow(self, state):
+  def do_flow_state(self, state):
     if self.transfer_count is None:
       self.link_credit = state.link_credit
     else:
@@ -223,13 +280,10 @@ class Receiver(Link):
     self.transfer_count = state.transfer_count
     self.available = state.available
 
-  def capacity(self):
-    return self.link_credit
-
   def flow(self, n, drain=False):
     self.link_credit += n
     self.drain = drain
-    self.modified = True
+    self.echo = True
 
   def drain(self):
     self.flow(0, True)
