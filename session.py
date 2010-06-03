@@ -103,9 +103,12 @@ class Session:
   def remove(self, link):
     # process any outstanding work before removing
     self.tick()
-    link.session = None
-    link.handle = None
-    del self.links[link.name]
+    if link.name in self.links and self.links[link.name] == link:
+      del self.links[link.name]
+      link.session = None
+      link.handle = None
+    else:
+      raise SessionError("no such link")
 
   def do_attach(self, attach):
     if attach.handle in self.handles:
@@ -223,7 +226,7 @@ class DeliveryMap:
   def __init__(self):
     # (link, delivery_tag) -> ranges
     self.transfers = {}
-    # transfer_id -> (link, delivery_tag)
+    # (transfer_id - unsettled_lwm) -> (link, delivery_tag)
     self.deliveries = []
     # lowest unsettled transfer_id
     self.unsettled_lwm = None

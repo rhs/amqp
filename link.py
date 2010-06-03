@@ -50,6 +50,7 @@ class Link(object):
     self.local = local
     self.remote = remote
 
+    self.session = None
     self.handle = None
 
     # local and remote state can be None, ATTACHED, DETACHED
