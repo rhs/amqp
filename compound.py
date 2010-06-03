@@ -18,7 +18,7 @@
 #
 
 import inspect
-from codec import Box
+from codec import Box, Symbol
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
@@ -110,7 +110,7 @@ def load_compound(types, *default_bases, **kwargs):
 
     dict = {}
     dict["NAME"] = pythonize(nd["@name"])
-    dict["DESCRIPTORS"] = (str(nd["descriptor/@name"]),
+    dict["DESCRIPTORS"] = (Symbol(str(nd["descriptor/@name"])),
                            decode_numeric_desc(nd["descriptor/@code"]))
     encoded = [Field(pythonize(f["@name"]),
                      pythonize(resolve(f["@type"], aliases)),
