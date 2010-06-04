@@ -18,16 +18,16 @@
 #
 
 from codec import TYPES as TYPES_DOC
-from compound import Compound, load_compound
+from composite import Composite, load_composite
 from util import load_xml
 
-class Body(Compound):
+class Body(Composite):
   pass
 
 TRANSPORT = load_xml("transport.xml")
 TYPES = TYPES_DOC.query["amqp/section/type"] + \
     TRANSPORT.query["amqp/section/type"]
-CLASSES = load_compound(TYPES, Compound, frame=Body)
+CLASSES = load_composite(TYPES, Composite, frame=Body)
 
 __all__ = ["CLASSES"]
 

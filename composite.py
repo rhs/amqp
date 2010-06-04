@@ -36,7 +36,7 @@ class Field:
         (self.name, self.type, self.mandatory, self.multiple, self.category,
          self.default)
 
-class Compound(object):
+class Composite(object):
 
   def __init__(self, *args, **kwargs):
     args = list(args)
@@ -63,7 +63,7 @@ class Compound(object):
     if value is None:
       if field.mandatory:
         raise ValueError("%s: field %s is mandatory" % (self, field.name))
-    elif field.type is not None and field.category != "compound":
+    elif field.type is not None and field.category != "composite":
       value = Box(field.type, value)
     return value
 
@@ -83,22 +83,22 @@ def resolve(name, aliases):
     name = aliases[name]
   return name
 
-def load_compound(types, *default_bases, **kwargs):
+def load_composite(types, *default_bases, **kwargs):
   aliases = {"*": None}
   classes = {}
-  compound = []
+  composite = []
   for nd in types:
     name = nd["@name"]
     cls = nd["@class"]
     classes[name] = cls
     if cls == "restricted":
       aliases[name] = nd["@source"]
-    elif cls == "compound":
-      compound.append(nd)
+    elif cls == "composite":
+      composite.append(nd)
 
   result = []
 
-  for nd in compound:
+  for nd in composite:
     archetype = pythonize(nd["@provides"])
     cls_name = pythonize(nd["@name"], camel=True)
     if cls_name in kwargs:

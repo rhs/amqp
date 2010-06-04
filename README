@@ -38,8 +38,8 @@ Files:
 
   codec.py       -- An implementation of the AMQP type system.
 
-  compound.py    -- Base class for compound types and utilities for
-                    loading compound type definitions from the xml.
+  composite.py   -- Base class for composite types and utilities for
+                    loading composite type definitions from the xml.
 
   concurrency.py -- Concurrency utilities.
 
