@@ -138,7 +138,7 @@ class Source:
     for entry in self.unacked.values():
       if entry.id < oldest.id:
         oldest = entry
-    print "RESUME: %s -> %s" % (self.next.id, oldest.id)
+#    print "RESUME: %s -> %s" % (self.next.id, oldest.id)
     self.next = oldest
     # XXX: clear unacked?
 
@@ -146,7 +146,7 @@ class Source:
     entry = self.unacked.pop(tag)
     if self.dequeue:
       entry.remove()
-      print "DEQUEUED:", tag, outcome
+#      print "DEQUEUED:", tag, outcome
       return "DEQUEUED"
 
   def close(self):
@@ -164,7 +164,7 @@ class Target:
 
   def put(self, tag, message):
     self.queue.put(message)
-    print "ENQUEUED:", tag, message.fragments
+#    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
     pass
