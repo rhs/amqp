@@ -166,6 +166,9 @@ class Target:
     self.queue.put(message)
     print "ENQUEUED:", tag, message.fragments
 
+  def resume(self, unsettled):
+    pass
+
   def settle(self, tag):
     return "ENQUEUED"
 

@@ -98,7 +98,7 @@ class Broker:
 
   def attach_receiver(self, link):
     if link.name in self.targets:
-      target = self.sources[link.name]
+      target = self.targets[link.name]
       target.resume(link.unsettled or {})
       return True
     elif link.remote.target in self.nodes:
