@@ -99,7 +99,7 @@ class Link(object):
     self.session.post_frame(body)
 
   def flow_state(self):
-    state = FlowState(unsettled_lwm = self.session.incoming.unsettled_lwm,
+    state = FlowState(unsettled_lwm = self.session.roles[self.role].unsettled_lwm,
                       session_credit = 65536,
                       transfer_count = self.transfer_count,
                       link_credit = self.link_credit,
@@ -253,10 +253,13 @@ class Sender(Link):
     self.transfer_count += 1
     self.link_credit -= 1
 
-    xfr.flow_state = self.flow_state()
     self.session.outgoing.append(self, xfr)
-    if not xfr.settled:
+    if xfr.settled:
+      self.session.outgoing.settle(self, xfr.delivery_tag)
+    else:
       self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state))
+
+    xfr.flow_state = self.flow_state()
     self.post_frame(xfr)
 
     return xfr.delivery_tag
