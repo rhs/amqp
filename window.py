@@ -74,5 +74,5 @@ class Window(Thread):
     return True
 
   def run(self):
-    gobject.timeout_add(10, self.redraw)
+    gobject.timeout_add(40, self.redraw)
     gtk.main()
