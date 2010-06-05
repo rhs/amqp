@@ -68,7 +68,10 @@ class Broker:
           self.process[link.role](link)
 
         if link.closing():
-          link.detach()
+          if link.remote:
+            link.detach()
+          else:
+            link.close()
 
         if link.closed():
           self.detach[link.role](link)
