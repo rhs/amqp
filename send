@@ -18,7 +18,7 @@
 # under the License.
 #
 
-import optparse, os
+import optparse, os, time
 from client import *
 
 parser = optparse.OptionParser(usage="usage: %prog [options] <address> [<content> ...]",
@@ -32,6 +32,8 @@ parser.add_option("-d", "--detach", action="store_true",
                   help="detach rather than close link")
 parser.add_option("-c", "--count", type=int, default=1,
                   help="number of messages to send (default %default)")
+parser.add_option("-s", "--sleep", type=float,
+                  help="sleep between sends for indicated period")
 parser.add_option("-i", "--stdin", action="store_true",
                   help="read messages from stdin (one message per line)")
 parser.add_option("-t", "--trace", default="err",
@@ -65,6 +67,8 @@ try:
 
     lnk.send(settled=True, fragments=[Fragment(True, True, 0, 0, content)])
     count += 1
+    if opts.sleep:
+      time.sleep(opts.sleep)
 except KeyboardInterrupt:
   pass
 

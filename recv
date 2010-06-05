@@ -18,7 +18,7 @@
 # under the License.
 #
 
-import optparse, os, sys
+import optparse, os, sys, time
 from client import *
 
 parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
@@ -34,6 +34,8 @@ parser.add_option("-b", "--block", action="store_true",
                   help="block until messages arrive")
 parser.add_option("-c", "--count", type=int, default=1,
                   help="number of messages to receive (default %default)")
+parser.add_option("-s", "--sleep", type=float,
+                  help="sleep between fetches for indicated period")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
 
@@ -63,8 +65,10 @@ try:
     count += 1
     print "".join([f.payload for f in xfr.fragments])
     sys.stdout.flush()
+    if opts.sleep:
+      time.sleep(opts.sleep)
     lnk.disposition(xfr.delivery_tag, "ACCEPTED")
-    if lnk.capacity() == 0:
+    if lnk.pending() < 10 and lnk.capacity() == 0:
       if opts.count == 0:
         credit = 10
       else:
