@@ -1,0 +1,12 @@
+rendered_queue = Queue(threshold=300)
+rendered_topic = Queue(threshold=300, ring=0, acquire=False, dequeue=False)
+
+from window import Window
+from widgets import SizeGraph
+
+_w = Window()
+
+_w.add(SizeGraph(rendered_queue), 0.3, 0.1, 0.1, 0.8)
+_w.add(SizeGraph(rendered_topic), 0.6, 0.1, 0.1, 0.8)
+
+_w.start()

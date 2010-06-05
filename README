@@ -61,6 +61,8 @@ Files:
 
   queue.py       -- A simple AMQP queue implementation.
 
+  rendered-nodes -- Example config file for rendered nodes.
+
   selector.py    -- A simple I/O driver.
 
   session.py
@@ -76,3 +78,7 @@ Files:
                     codec.py.
 
   util.py        -- Common utilities.
+
+  widgets.py     -- Cairo widgets for rendering nodes.
+
+  window.py      -- Thread that manages gtk window and cairo surface.
