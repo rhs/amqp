@@ -163,7 +163,7 @@ class Link(object):
     return self._query(0, settled, modified)
 
   def get_remote(self, settled=None, modified=None):
-    return self._query(1, settled, modified)
+    return [(t, l, r) for t, l, r in self._query(1, settled, modified) if not l.settled]
 
   def disposition(self, delivery_tag, state=None, settled=False):
     local, remote = self.unsettled[delivery_tag]
