@@ -104,7 +104,7 @@ class Selector:
     self.thread.setDaemon(True)
     self.thread.start();
 
-  def run(self):
+  def run(self, idle=None, period=None):
     while not self.stopped:
       wakeup = None
       for sel in self.selectables.copy():
@@ -116,28 +116,38 @@ class Selector:
             wakeup = min(wakeup, t)
 
       if wakeup is None:
-        timeout = None
+        timeout = period
       else:
         timeout = max(0, wakeup - time.time())
+        if period:
+          timeout = min(period, timeout)
 
       rd, wr, ex = select(self.reading, self.writing, (), timeout)
 
+      is_idle = True
       for sel in wr:
         if sel.writing():
           sel.writeable()
+          is_idle = False
 
       for sel in rd:
         if sel.reading():
           sel.readable()
+          is_idle = False
 
       now = time.time()
       for sel in self.selectables.copy():
         w = sel.timing()
         if w is not None and now > w:
           sel.timeout()
+          is_idle = False
+
+      if is_idle and idle:
+        idle()
 
   def stop(self, timeout=None):
     self.stopped = True
     self.wakeup()
-    self.thread.join(timeout)
-    self.thread = None
+    if self.thread:
+      self.thread.join(timeout)
+      self.thread = None

@@ -171,16 +171,30 @@ parser.add_option("-t", "--trace", default="err",
 parser.add_option("-T", "--threshold", dest="thresholds", default=[],
                   action="append", metavar="NAME=THRESHOLD",
                   help="specify flow control threshold for a queue")
+parser.add_option("-g", "--graphics", action="store_true",
+                  help="launch the broker with graphics enabled")
 
 opts, args = parser.parse_args()
 
+if opts.graphics:
+  from window import Window
+else:
+  class Window:
+    def __init__(self, *args, **kwargs):
+      pass
+    def add(self, *args, **kwargs):
+      raise RuntimeError("graphics are not enabled")
+    def redraw(self):
+      pass
+
 try:
   broker = Broker(opts.container)
+  selector = Selector()
+  window = Window(lambda *args: selector.stop())
 
-  thresholds = {}
-  for value in opts.thresholds:
-    name, threshold = value.split("=", 2)
-    thresholds[name] = int(threshold)
+  def tick(c):
+    broker.tick(c)
+    window.redraw()
 
   nodes = {}
   for n in opts.nodes:
@@ -191,18 +205,25 @@ try:
       continue
     broker.nodes[name] = value
 
+  thresholds = {}
+  for value in opts.thresholds:
+    name, threshold = value.split("=", 2)
+    thresholds[name] = int(threshold)
+
   for a in args:
     broker.nodes[a] = Queue(thresholds.get(a))
 
-  selector = Selector()
   sock = bind(opts.interface, opts.port)
 
   def handler(accepted):
     conn = Connection(lambda properties: Session(link, properties))
     conn.tracing(*opts.trace.split())
-    selector.register(ConnectionSelectable(accepted, conn, broker.tick))
+    selector.register(ConnectionSelectable(accepted, conn, tick))
 
   selector.register(Acceptor(sock, handler))
-  selector.run()
+  if opts.graphics:
+    selector.run(window.redraw, 0.1)
+  else:
+    selector.run()
 except KeyboardInterrupt:
   pass

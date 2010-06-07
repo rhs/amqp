@@ -57,10 +57,12 @@ class Screen(gtk.DrawingArea):
 
 class Window(Thread):
 
-  def __init__(self):
+  def __init__(self, quit=None):
     Thread.__init__(self)
+    self.quit = quit
     self.window = gtk.Window()
-    self.window.connect("delete-event", gtk.main_quit)
+    if self.quit:
+      self.window.connect("delete-event", quit)
     self.screen = Screen()
     self.screen.show()
     self.window.add(self.screen)
@@ -71,8 +73,6 @@ class Window(Thread):
 
   def redraw(self):
     self.window.queue_draw()
+    while gtk.events_pending():
+      gtk.main_iteration(block=False)
     return True
-
-  def run(self):
-    gobject.timeout_add(40, self.redraw)
-    gtk.main()
