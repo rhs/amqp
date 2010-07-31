@@ -89,6 +89,8 @@ class Symbol:
   def __repr__(self):
     return "Symbol(%r)" % self.name
 
+# XXX: sym instead of Symbol?, box instead of Box?, kill Described in favor of overloading box?
+
 UNDESCRIBED = object()
 
 class TypeEncoder:
@@ -216,6 +218,7 @@ class TypeEncoder:
 
   def enc_string(self, s):
     bytes = s.encode("utf8")
+    # XXX: this is a bug!!!!????
     return self.enc_variable("string_str8_utf", bytes)
 
   def enc_symbol(self, s):

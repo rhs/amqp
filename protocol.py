@@ -24,13 +24,32 @@ from util import load_xml
 class Body(Composite):
   pass
 
+class FieldCompare(Composite):
+
+  def __eq__(self, o):
+    if self.__class__ != o.__class__:
+      return False
+
+    for f in self.FIELDS:
+      if getattr(self, f.name) != getattr(o, f.name):
+        return False
+
+    return True
+
 TRANSPORT = load_xml("transport.xml")
-TYPES = TYPES_DOC.query["amqp/section/type"] + \
-    TRANSPORT.query["amqp/section/type"]
-CLASSES = load_composite(TYPES, Composite, frame=Body)
+MESSAGING = load_xml("messaging.xml")
+
+TYPES = reduce(lambda x, y: x + y,
+               [d.query["amqp/section/type"]
+                for d in [TYPES_DOC, TRANSPORT, MESSAGING]])
+CLASSES = load_composite(TYPES, Composite, frame=Body, outcome=FieldCompare,
+                         TransferState=FieldCompare)
 
 __all__ = ["CLASSES"]
 
 for cls in CLASSES:
   globals()[cls.__name__] = cls
   __all__.append(cls.__name__)
+
+ACCEPTED = TransferState(outcome=Accepted())
+REJECTED = TransferState(outcome=Rejected())

@@ -40,6 +40,7 @@ class Connection:
     self.factory = factory
     self._tracing = set()
     self.tracing(*os.environ.get("AMQP_TRACE", "").split())
+    self.multiline = False
     self.input = Buffer()
     self.output = Buffer(struct.pack(PROTO_HDR_FMT, "AMQP", 0, 1, 0, 0))
 
@@ -118,7 +119,7 @@ class Connection:
   def process_frame(self, f):
     body, remainder = self.type_decoder.decode(f.payload)
     assert remainder == ""
-    self.trace("frm", "RECV[%s]: %s", f.channel, body)
+    self.trace("frm", "RECV[%s]: %s", f.channel, body.format(self.multiline))
     getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
 
   def unhandled(self, channel, body):
@@ -146,7 +147,7 @@ class Connection:
 
   def post_frame(self, channel, body):
     assert not self.close_sent
-    self.trace("frm", "SENT[%s]: %s", channel, body)
+    self.trace("frm", "SENT[%s]: %s", channel, body.format(self.multiline))
     f = Frame(AMQP_FRAME, channel, None, self.type_encoder.encode(body))
     self.frame_encoder.write(f)
     self.output.write(self.frame_encoder.read())

@@ -68,13 +68,13 @@ class Broker:
           self.process[link.role](link)
 
         if link.closing():
+          self.detach[link.role](link)
           if link.remote:
             link.detach()
           else:
             link.close()
 
         if link.closed():
-          self.detach[link.role](link)
           ssn.remove(link)
 
       if ssn.ending():
@@ -91,8 +91,8 @@ class Broker:
       source = self.sources[link.name]
       source.resume(link.unsettled or {})
       return True
-    elif link.remote.source in self.nodes:
-      n = self.nodes[link.remote.source]
+    elif link.remote.source.address in self.nodes:
+      n = self.nodes[link.remote.source.address]
       source = n.source()
       self.sources[link.name] = source
       return True
@@ -104,8 +104,8 @@ class Broker:
       target = self.targets[link.name]
       target.resume(link.unsettled or {})
       return True
-    elif link.remote.target in self.nodes:
-      n = self.nodes[link.remote.target]
+    elif link.remote.target.address in self.nodes:
+      n = self.nodes[link.remote.target.address]
       target = n.target()
       self.targets[link.name] = target
       if target.capacity():

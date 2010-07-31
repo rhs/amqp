@@ -23,12 +23,13 @@ from connection import Connection as ProtoConnection
 from session import Session as ProtoSession, SessionError
 from link import Link as ProtoLink, Sender as ProtoSender, \
     Receiver as ProtoReceiver, LinkError, link
+from messaging import Message, encode, decode
 from selector import Selector
 from util import ConnectionSelectable, Constant
 from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
-from protocol import Fragment, Linkage
+from protocol import Linkage, Source, Target, ACCEPTED
 
 class Timeout(Exception):
   pass
@@ -121,7 +122,7 @@ class Session:
 
   @synchronized
   def sender(self, target, name=None):
-    snd = Sender(self.connection, name or str(uuid4()), target)
+    snd = Sender(self.connection, name or str(uuid4()), Target(target))
     self.proto.add(snd.proto)
     snd.proto.attach()
     self.wait(lambda: snd.proto.opened() or snd.proto.closing())
@@ -132,7 +133,7 @@ class Session:
 
   @synchronized
   def receiver(self, source, limit=0, drain=False, name=None):
-    rcv = Receiver(self.connection, name or str(uuid4()), source)
+    rcv = Receiver(self.connection, name or str(uuid4()), Source(source))
     self.proto.add(rcv.proto)
     if limit:
       rcv.flow(limit, drain=drain)
@@ -201,9 +202,11 @@ class Sender(Link):
     self.proto = ProtoSender(name, Linkage(None, target))
 
   @synchronized
-  def send(self, **kwargs):
+  def send(self, message=None, delivery_tag=None, **kwargs):
     self.wait(self.capacity)
-    return self.proto.send(**kwargs)
+    if message:
+      kwargs["fragments"] = encode(message, self.connection.proto.type_encoder)
+    return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 
 class Receiver(Link):
 
@@ -235,4 +238,4 @@ class Receiver(Link):
 
   @synchronized
   def get(self):
-    return self.proto.get()
+    return decode(self.proto.get(), self.connection.proto.type_decoder)

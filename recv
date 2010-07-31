@@ -61,13 +61,13 @@ lnk = ssn.receiver(addr, limit=credit, drain=not opts.block, name=opts.link)
 count = 0
 try:
   while lnk.pending(block=True):
-    xfr = lnk.get()
+    msg = lnk.get()
     count += 1
-    print "".join([f.payload for f in xfr.fragments])
+    print msg
     sys.stdout.flush()
     if opts.sleep:
       time.sleep(opts.sleep)
-    lnk.disposition(xfr.delivery_tag, "ACCEPTED")
+    lnk.disposition(msg.delivery_tag, ACCEPTED)
     if lnk.pending() < 10 and lnk.capacity() == 0:
       if opts.count == 0:
         credit = 10

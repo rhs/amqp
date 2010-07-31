@@ -17,6 +17,7 @@
 # under the License.
 #
 
+from protocol import ACCEPTED
 from util import Constant
 
 TAIL = Constant("TAIL")
@@ -142,12 +143,12 @@ class Source:
     self.next = oldest
     # XXX: clear unacked?
 
-  def settle(self, tag, outcome):
+  def settle(self, tag, state):
     entry = self.unacked.pop(tag)
     if self.dequeue:
       entry.remove()
 #      print "DEQUEUED:", tag, outcome
-      return "DEQUEUED"
+      return state
 
   def close(self):
     for tag in self.unacked.keys():
@@ -170,7 +171,7 @@ class Target:
     pass
 
   def settle(self, tag):
-    return "ENQUEUED"
+    return ACCEPTED
 
   def close(self):
     # XXX: ???

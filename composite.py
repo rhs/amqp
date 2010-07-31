@@ -36,6 +36,9 @@ class Field:
         (self.name, self.type, self.mandatory, self.multiple, self.category,
          self.default)
 
+OPENS = "[("
+CLOSES = ")]"
+
 class Composite(object):
 
   def __init__(self, *args, **kwargs):
@@ -64,19 +67,93 @@ class Composite(object):
       if field.mandatory:
         raise ValueError("%s: field %s is mandatory" % (self, field.name))
     elif field.type is not None and field.category != "composite":
-      value = Box(field.type, value)
+      if field.multiple:
+        value = [Box(field.type, v) for v in value]
+      else:
+        value = Box(field.type, value)
     return value
 
-  def _args(self):
-    args = []
+  def _defaulted(self, field):
+    return field.default == getattr(self, field.name)
+
+  def _format(self, field, multiline=True):
+    value = getattr(self, field.name)
+    if multiline and field.multiple and value is not None and len(value) > 1:
+      return ("[\n%s\n]" % ",\n".join(map(repr, value))).replace("\n", "\n  ")
+    else:
+      return repr(value)
+
+  def _ordinal_args(self, multiline=False):
+    fields = []
     for f in self.FIELDS:
       v = getattr(self, f.name)
-      if v != f.default:
-        args.append("%s=%r" % (f.name, v))
+      fields.append(f)
+    while fields and self._defaulted(fields[-1]):
+      fields.pop()
+    return map(lambda f: self._format(f, multiline), fields)
+
+  def _keyword_args(self, multiline=False):
+    args = []
+    for f in self.FIELDS:
+      if not self._defaulted(f):
+        args.append("%s=%s" % (f.name, self._format(f, multiline)))
     return args
 
+  def _wrap(self, st, length, first=None):
+    lines = st.split("\n")
+    result = ""
+    count = 0
+    limit = first or length
+    for i in range(len(lines)):
+      line = lines[i]
+      final = i == len(lines) - 1
+
+      last = result[-1:]
+      if last in OPENS:
+        stripped = line.lstrip()
+      else:
+        stripped = " %s" % line.lstrip()
+
+      if len(stripped) > 1 and stripped[0] == " " and stripped[1] in CLOSES:
+        stripped = stripped[1:]
+
+      if count + len(stripped) <= limit or final and stripped in CLOSES:
+        result += stripped
+        count += len(stripped)
+      else:
+        result += "\n" + line
+        count = len(line)
+        limit = length
+
+    return result.strip()
+
+  def format(self, multiline=False):
+    if multiline:
+      sep = ",\n"
+    else:
+      sep = ", "
+
+    kwa = sep.join(self._keyword_args(multiline))
+    ora = sep.join(self._ordinal_args(multiline))
+
+    if self.ARCHETYPE == "frame" or len(kwa) < len(ora):
+      a = kwa
+    else:
+      a = ora
+
+    name = self.__class__.__name__
+    if multiline:
+      fmt = "%s(\n%s\n)"
+    else:
+      fmt = "%s(%s)"
+    result = (fmt % (name, a)).replace("\n", "\n  ")
+    if multiline:
+      return self._wrap(result, 64, 61 - len(name))
+    else:
+      return result
+
   def __repr__(self):
-    return "%s(%s)" % (self.__class__.__name__, ", ".join(self._args()))
+    return self.format()
 
 def resolve(name, aliases):
   while name in aliases:
@@ -110,6 +187,7 @@ def load_composite(types, *default_bases, **kwargs):
 
     dict = {}
     dict["NAME"] = pythonize(nd["@name"])
+    dict["ARCHETYPE"] = archetype
     dict["DESCRIPTORS"] = (Symbol(str(nd["descriptor/@name"])),
                            decode_numeric_desc(nd["descriptor/@code"]))
     encoded = [Field(pythonize(f["@name"]),
