@@ -52,6 +52,10 @@ Files:
 
   link.py        -- An implementation of an AMQP link endpoint.
 
+  messaging.py   -- An implementation of the AMQP messaging layer.
+
+  messaging.xml  -- Definitions from the AMQP messaging specification.
+
   mllib/         -- An XML parsing library used to load type definitions.
 
   protocol.py    -- Classes representing the types defined by the
