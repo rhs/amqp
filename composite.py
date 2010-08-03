@@ -18,7 +18,7 @@
 #
 
 import inspect
-from codec import Box, Symbol
+from codec import Box, Described, Symbol
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
@@ -46,6 +46,11 @@ class Composite(object):
     for f in self.FIELDS:
       if args:
         v = args.pop(0)
+        if f.multiple:
+          if isinstance(v, Described) and v.descriptor == True:
+            v = v.value
+          else:
+            v = [v]
       else:
         v = kwargs.pop(f.name, f.default)
       setattr(self, f.name, v)
@@ -71,6 +76,8 @@ class Composite(object):
         value = [Box(field.type, v) for v in value]
       else:
         value = Box(field.type, value)
+    if field.multiple:
+      value = Described(True, value)
     return value
 
   def _defaulted(self, field):
