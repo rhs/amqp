@@ -23,8 +23,10 @@ from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name, type, mandatory, multiple, category, default=None):
+  def __init__(self, name, key, type, mandatory, multiple, category,
+               default=None):
     self.name = name
+    self.key = key
     self.type = type
     self.mandatory = mandatory
     self.multiple = multiple
@@ -64,7 +66,17 @@ class Composite(object):
       raise TypeError("got unexpected keyword argument '%s'" % kwargs.keys()[0])
 
   def deconstruct(self):
+    return getattr(self, "deconstruct_%s" % self.SOURCE)()
+
+  def deconstruct_list(self):
     return [self.deconstruct_field(f) for f in self.ENCODED_FIELDS]
+
+  def deconstruct_map(self):
+    result = {}
+    for f in self.ENCODED_FIELDS:
+      if not self._defaulted(f):
+        result[f.key] = self.deconstruct_field(f)
+    return result
 
   def deconstruct_field(self, field):
     value = getattr(self, field.name)
@@ -197,7 +209,9 @@ def load_composite(types, *default_bases, **kwargs):
     dict["ARCHETYPE"] = archetype
     dict["DESCRIPTORS"] = (Symbol(str(nd["descriptor/@name"])),
                            decode_numeric_desc(nd["descriptor/@code"]))
+    dict["SOURCE"] = pythonize(nd["@source"])
     encoded = [Field(pythonize(f["@name"]),
+                     Symbol(f["@name"]),
                      pythonize(resolve(f["@type"], aliases)),
                      f["@mandatory"] == "true",
                      f["@multiple"] == "true",

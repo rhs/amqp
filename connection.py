@@ -22,7 +22,7 @@ from protocol import *
 
 from framing import AMQP_FRAME, Frame, FrameDecoder, FrameEncoder
 from codec import TypeDecoder, TypeEncoder
-from util import Buffer, parse
+from util import Buffer, parse, pythonize
 from uuid import uuid4
 
 
@@ -53,9 +53,16 @@ class Connection:
     self.type_encoder = TypeEncoder()
 
     for cls in CLASSES:
-      self.type_encoder.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0], v.deconstruct())
+      # XXX: should index some of this stuff and move it elsewhere
+      self.type_encoder.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
+                                                         v.deconstruct())
       for d in cls.DESCRIPTORS:
-        self.type_decoder.constructors[d] = lambda d, v, c=cls: c(*v)
+        if cls.SOURCE == "map":
+          const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
+                                                for (k, v) in m.iteritems()]))
+        else:
+          const = lambda d, l, c=cls: c(*l)
+        self.type_decoder.constructors[d] = const
 
     self.open_rcvd = False
     self.open_sent = False
