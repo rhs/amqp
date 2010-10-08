@@ -51,6 +51,9 @@ class Broker:
         ssn.begin()
 
     for ssn in connection.outgoing.values():
+      if ssn.beginning():
+        ssn.begin()
+
       for link in ssn.links.values():
         if link.opening():
           if self.attach[link.role](link):

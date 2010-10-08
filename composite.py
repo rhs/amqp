@@ -51,7 +51,7 @@ class Composite(object):
         if f.multiple:
           if isinstance(v, Described) and v.descriptor == True:
             v = v.value
-          else:
+          elif v is not None:
             v = [v]
       else:
         v = kwargs.pop(f.name, f.default)
@@ -88,7 +88,7 @@ class Composite(object):
         value = [Box(field.type, v) for v in value]
       else:
         value = Box(field.type, value)
-    if field.multiple:
+    if field.multiple and value is not None:
       value = Described(True, value)
     return value
 
