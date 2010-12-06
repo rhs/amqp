@@ -17,7 +17,7 @@
 # under the License.
 #
 
-import inspect, mllib, os, struct
+import inspect, mllib, os, struct, sys
 from protocol import *
 
 from framing import AMQP_FRAME, Frame, FrameDecoder, FrameEncoder
@@ -89,7 +89,8 @@ class Connection:
         message = format % args
       else:
         message = format
-      print prefix, message.replace(os.linesep, "%s%s " % (os.linesep, prefix))
+      print >> sys.stderr, prefix, \
+          message.replace(os.linesep, "%s%s " % (os.linesep, prefix))
 
   def opening(self):
     return self.open_rcvd and not self.open_sent
