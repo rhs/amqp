@@ -17,7 +17,7 @@
 # under the License.
 #
 
-import struct, uuid, cStringIO
+import datetime, struct, time, uuid, cStringIO
 from util import pythonize, load_xml, identity
 
 class Encoding:
@@ -109,6 +109,7 @@ class TypeEncoder:
                           # same to avoid platform dependencies
       long: self.enc_long,
       float: self.enc_double, # python floats are actually doubles
+      datetime.datetime: self.enc_timestamp,
       dict: self.enc_map,
       list: self.enc_list,
       tuple: self.enc_list,
@@ -197,7 +198,8 @@ class TypeEncoder:
     return self.enc_fixed("char_utf32", "!I", ord(c))
 
   def enc_timestamp(self, t):
-    xxx
+    return self.enc_fixed("timestamp_ms64", "!q",
+                          1000*int(time.mktime(t.timetuple())))
 
   def enc_uuid(self, u):
     return self.enc_fixed("uuid", "!16s", u.bytes)
@@ -318,8 +320,9 @@ class TypeDecoder:
   def dec_char_utf32(self, bytes):
     return self.unpack("!I", bytes, unichr)
 
-  def dec_timestamp_ms64(self, t):
-    xxx
+  def dec_timestamp_ms64(self, bytes):
+    ms, bytes = self.dec_long(bytes)
+    return datetime.datetime.fromtimestamp(ms/1000.0), bytes
 
   def dec_uuid(self, bytes):
     return uuid.UUID(bytes=bytes[:16]), bytes[16:]
@@ -341,10 +344,10 @@ class TypeDecoder:
     return self.dec_variable("!I", bytes, lambda x: x.decode("utf8"))
 
   def dec_string_str8_utf16(self, bytes):
-    return self.dec_variable("!B", bytes, lambda x: x.decode("utf16"))
+    return self.dec_variable("!B", bytes, lambda x: x.decode("utf_16_be"))
 
   def dec_string_str32_utf16(self, bytes):
-    return self.dec_variable("!I", bytes, lambda x: x.decode("utf16"))
+    return self.dec_variable("!I", bytes, lambda x: x.decode("utf_16_be"))
 
   def dec_symbol_sym8(self, bytes):
     return self.dec_variable("!B", bytes, lambda x: Symbol(str(x.decode("ascii"))))
