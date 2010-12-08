@@ -84,7 +84,7 @@ class Symbol:
     return hash(self.name)
 
   def __eq__(self, o):
-    return self.name == o.name
+    return isinstance(o, Symbol) and self.name == o.name
 
   def __repr__(self):
     return "Symbol(%r)" % self.name
