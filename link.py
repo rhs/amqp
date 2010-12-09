@@ -279,9 +279,7 @@ class Receiver(Link):
     self.do_flow_state(xfr.flow_state)
 
   def do_flow_state(self, state):
-    if self.transfer_count is None:
-      self.link_credit = state.link_credit
-    else:
+    if self.transfer_count is not None:
       self.link_credit -= state.transfer_count - self.transfer_count
     self.transfer_count = state.transfer_count
     self.available = state.available
