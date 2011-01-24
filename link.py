@@ -17,8 +17,7 @@
 # under the License.
 #
 
-from protocol import Attach, Flow, FlowState, Transfer, Disposition, Extent, \
-    Detach
+from protocol import Attach, Flow, Transfer, Disposition, Detach
 from util import Constant, RangeSet
 from uuid import uuid4
 
@@ -98,15 +97,22 @@ class Link(object):
     body.handle = self.handle
     self.session.post_frame(body)
 
-  def flow_state(self):
-    state = FlowState(unsettled_lwm = self.session.roles[self.role].unsettled_lwm,
-                      session_credit = 65536,
-                      transfer_count = self.transfer_count,
-                      link_credit = self.link_credit,
-                      available = self.available,
-                      drain = self.drain)
+  def _flow(self):
+    if self.session.incoming.unsettled_hwm is None:
+      next = None
+    else:
+      next = self.session.incoming.unsettled_hwm + 1
+    flow = Flow(handle = self.handle,
+                next_incoming_id = next,
+                incoming_window = 65536,
+                next_outgoing_id = self.session.outgoing.unsettled_hwm + 1,
+                outgoing_window = 65536,
+                transfer_count = self.transfer_count,
+                link_credit = self.link_credit,
+                available = self.available,
+                drain = self.drain)
     self.echo = False
-    return state
+    return flow
 
   def attach(self):
     if self.attach_sent:
@@ -114,15 +120,14 @@ class Link(object):
     self.handle = self.session.allocate_handle()
     self.attach_sent = True
     self.post_frame(Attach(name = self.name,
-                           flow_state = self.flow_state(),
                            role = self.role,
                            local = self.local,
                            remote = self.remote))
+    self.post_frame(self._flow())
 
   def do_attach(self, attach):
     self.attach_rcvd = True
     self.remote = attach.local
-    self.do_flow_state(attach.flow_state)
 
   # XXX: closing and errors
   def detach(self):
@@ -150,7 +155,7 @@ class Link(object):
       remote.modified = True
 
   def do_flow(self, flow):
-    self.do_flow_state(flow.flow_state)
+    self.do_flow_state(flow)
     self.echo = self.echo or flow.echo
 
   def _query(self, index, settled=None, modified=None):
@@ -189,7 +194,7 @@ class Link(object):
     # initialized, this ensures an unambiguous calculation of the
     # initial transfer_count
     if self.echo and self.transfer_count is not None:
-      self.post_frame(Flow(flow_state=self.flow_state()))
+      self.post_frame(self._flow())
 
     role = self.session.roles[self.role]
     states = {}
@@ -212,11 +217,13 @@ class Link(object):
       local.modified = False
 
     for local, ranges in states.items():
-      extents = []
       for r in ranges:
-        ext = Extent(r.lower, r.upper, settled=local.settled, state=local.state)
-        extents.append(ext)
-      self.session.post_frame(Disposition(role=self.role, extents=extents))
+        disp = Disposition(role=self.role, first=r.lower, last=r.upper,
+                           settled=local.settled, state=local.state)
+        self.session.post_frame(disp)
+
+  def _units(self, xfr):
+    return 1
 
 class Sender(Link):
 
@@ -239,7 +246,7 @@ class Sender(Link):
     if self.drain:
       self.transfer_count += self.link_credit
       self.link_credit = 0
-      self.post_frame(Flow(flow_state=self.flow_state()))
+      self.post_frame(self._flow())
 
   def send(self, **kwargs):
     if self.link_credit <= 0:
@@ -250,8 +257,9 @@ class Sender(Link):
     if not xfr.more:
       self.delivery_count += 1
 
-    self.transfer_count += 1
-    self.link_credit -= 1
+    u = self._units(xfr)
+    self.transfer_count += u
+    self.link_credit -= u
 
     self.session.outgoing.append(self, xfr)
     if xfr.settled:
@@ -259,7 +267,6 @@ class Sender(Link):
     else:
       self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state))
 
-    xfr.flow_state = self.flow_state()
     self.post_frame(xfr)
 
     return xfr.delivery_tag
@@ -276,7 +283,10 @@ class Receiver(Link):
     self.session.incoming.append(self, xfr)
     self.incoming.append(xfr)
     self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
-    self.do_flow_state(xfr.flow_state)
+    u = self._units(xfr)
+    self.link_credit -= u
+    self.transfer_count += u
+    self.available -= u
 
   def do_flow_state(self, state):
     if self.transfer_count is not None:

@@ -50,13 +50,10 @@ class Message:
 
 def encode(message, encoder):
   # XXX: constants
-  head = Fragment(True, True, 0, 0, encoder.encode(message.header))
-  prop = Fragment(True, True, 1, len(head.payload),
-                  encoder.encode(message.properties))
-  body = Fragment(True, True, 3, prop.fragment_offset + len(prop.payload),
-                  message.content)
-  foot = Fragment(True, True, 2, body.fragment_offset + len(body.payload),
-                  encoder.encode(message.footer))
+  head = Fragment(True, True, 0, 0, 0, encoder.encode(message.header))
+  prop = Fragment(True, True, 1, 1, 0, encoder.encode(message.properties))
+  body = Fragment(True, True, 3, 2, 0, message.content)
+  foot = Fragment(True, True, 2, 3, 0, encoder.encode(message.footer))
   return (head, prop, body, foot)
 
 def decode(transfer, decoder):

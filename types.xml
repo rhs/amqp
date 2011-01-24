@@ -2,12 +2,11 @@
 
 <!--
 
-Copyright (c) 2010 Bank of America, N.A., Barclays Bank PLC, Cisco Systems,
-Credit Suisse, Deutsche Boerse Systems, Envoy Technologies Inc.,Goldman Sachs,
-IONA Technologies PLC, iMatix Corporation sprl.,JPMorgan Chase Bank Inc. N.A,
-Microsoft Corporation, Novell, Rabbit Technologies Ltd., Red Hat Inc., Solace
-Systems Inc., Tervela Inc., TWIST Process Innovations Ltd, WS02 Inc. and
-29West Inc
+Copyright Bank of America, N.A., Barclays Bank PLC, Cisco Systems, Credit
+Suisse, Deutsche Boerse Systems, Envoy Technologies Inc., Goldman Sachs, INETCO
+Systems Limited, JPMorgan Chase Bank Inc. N.A, Microsoft Corporation, Novell,
+Progress Software, Rabbit Technologies Ltd., Red Hat Inc., Solace Systems Inc.,
+Tervela Inc., TWIST Process Innovations Ltd, WS02 Inc. and 29West Inc 2006-2010.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -72,6 +71,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="double" class="primitive">
       <encoding name="ieee-754" code="0x82" category="fixed" width="8"/>
     </type>
+    <type name="decimal32" class="primitive">
+      <encoding name="ieee-754" code="0x74" category="fixed" width="4"/>
+    </type>
+    <type name="decimal64" class="primitive">
+      <encoding name="ieee-754" code="0x84" category="fixed" width="8"/>
+    </type>
     <type name="char" class="primitive">
       <encoding name="utf32" code="0x73" category="fixed" width="4"/>
     </type>
@@ -93,7 +98,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="symbol" class="primitive">
       <encoding name="sym8" code="0xa3" category="variable" width="1"/>
-      <encoding name="sym32" code="0xb3" category="variable" width="2"/>
+      <encoding name="sym32" code="0xb3" category="variable" width="4"/>
     </type>
     <type name="list" class="primitive">
       <encoding name="list8" code="0xc0" category="compound" width="1"/>

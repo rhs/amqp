@@ -80,10 +80,12 @@ class Session:
       raise SessionError("already begun")
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
+                          next_outgoing_id = self.outgoing.unsettled_hwm + 1,
                           properties = self.properties))
 
   def do_begin(self, begin):
     self.begin_rcvd = True
+    self.incoming.unsettled_hwm = begin.next_outgoing_id - 1
 
   def end(self, error=None):
     if self.end_sent:
@@ -135,15 +137,13 @@ class Session:
     link.write(detach)
 
   def do_disposition(self, disp):
-    if disp.extents:
-      role = self.roles[not disp.role]
-      for e in disp.extents:
-        start = max(role.unsettled_lwm, e.first)
-        for id in range(start, e.last+1):
-          delivery = role.get_delivery(id)
-          if delivery:
-            link, tag = delivery
-            link.do_disposition(tag, e.state, e.settled)
+    role = self.roles[not disp.role]
+    start = max(role.unsettled_lwm, disp.first)
+    for id in range(start, disp.last+1):
+      delivery = role.get_delivery(id)
+      if delivery:
+        link, tag = delivery
+        link.do_disposition(tag, disp.state, disp.settled)
 
   def tick(self):
     for link in self.links.values():

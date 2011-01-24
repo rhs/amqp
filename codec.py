@@ -194,6 +194,12 @@ class TypeEncoder:
   def enc_double(self, d):
     return self.enc_fixed("double_ieee_754", "!d", d)
 
+  def enc_decimal32(self, d):
+    xxx
+
+  def enc_decimal64(self, d):
+    xxx
+
   def enc_char(self, c):
     return self.enc_fixed("char_utf32", "!I", ord(c))
 
@@ -316,6 +322,12 @@ class TypeDecoder:
 
   def dec_double_ieee_754(self, bytes):
     return self.unpack("!d", bytes)
+
+  def dec_decimal32_ieee_754(self, bytes):
+    xxx
+
+  def dec_decimal64_ieee_754(self, bytes):
+    xxx
 
   def dec_char_utf32(self, bytes):
     return self.unpack("!I", bytes, unichr)
