@@ -49,9 +49,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="uint" class="primitive">
       <encoding code="0x70" category="fixed" width="4"/>
+      <encoding name="smalluint" code="0x52" category="fixed" width="1"/>
     </type>
     <type name="ulong" class="primitive">
       <encoding code="0x80" category="fixed" width="8"/>
+      <encoding name="smallulong" code="0x53" category="fixed" width="1"/>
     </type>
     <type name="byte" class="primitive">
       <encoding code="0x51" category="fixed" width="1"/>
@@ -61,9 +63,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="int" class="primitive">
       <encoding code="0x71" category="fixed" width="4"/>
+      <encoding name="smallint" code="0x54" category="fixed" width="1"/>
     </type>
     <type name="long" class="primitive">
       <encoding code="0x81" category="fixed" width="8"/>
+      <encoding name="smalllong" code="0x55" category="fixed" width="1"/>
     </type>
     <type name="float" class="primitive">
       <encoding name="ieee-754" code="0x72" category="fixed" width="4"/>

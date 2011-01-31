@@ -302,8 +302,14 @@ class TypeDecoder:
   def dec_uint(self, bytes):
     return self.unpack("!I", bytes)
 
+  def dec_uint_smalluint(self, bytes):
+    return self.unpack("!B", bytes)
+
   def dec_ulong(self, bytes):
     return self.unpack("!Q", bytes)
+
+  def dec_ulong_smallulong(self, bytes):
+    return self.unpack("!B", bytes)
 
   def dec_byte(self, bytes):
     return self.unpack("!b", bytes)
@@ -314,8 +320,14 @@ class TypeDecoder:
   def dec_int(self, bytes):
     return self.unpack("!i", bytes)
 
+  def dec_int_smallint(self, bytes):
+    return self.unpack("!b", bytes)
+
   def dec_long(self, bytes):
     return self.unpack("!q", bytes)
+
+  def dec_long_smalllong(self, bytes):
+    return self.unpack("!b", bytes)
 
   def dec_float_ieee_754(self, bytes):
     return self.unpack("!f", bytes)
