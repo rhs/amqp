@@ -81,6 +81,7 @@ class Session:
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
                           next_outgoing_id = self.outgoing.unsettled_hwm + 1,
+                          window_size = 65536,
                           properties = self.properties))
 
   def do_begin(self, begin):
