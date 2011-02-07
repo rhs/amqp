@@ -140,7 +140,11 @@ class Session:
   def do_disposition(self, disp):
     role = self.roles[not disp.role]
     start = max(role.unsettled_lwm, disp.first)
-    for id in range(start, disp.last+1):
+    if disp.last is None:
+      last = start + 1
+    else:
+      last = disp.last + 1
+    for id in range(start, last):
       delivery = role.get_delivery(id)
       if delivery:
         link, tag = delivery
