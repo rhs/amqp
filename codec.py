@@ -266,9 +266,16 @@ class TypeDecoder:
     constructor = self.constructors.get(descriptor, Described)
     return constructor(descriptor, value)
 
-  def decode(self, bytes):
+  def decode(self, bytes, count=1):
     descriptor, (encoding, decoder), bytes = self.dec_type(bytes)
-    value, bytes = decoder(bytes)
+    if count > 1:
+      value = []
+      while count > 0:
+        v, bytes = decoder(bytes)
+        value.append(v)
+        count -= 1
+    else:
+      value, bytes = decoder(bytes)
     return self.construct(descriptor, value), bytes
 
   def unpack(self, format, bytes, constructor=identity):
@@ -394,11 +401,16 @@ class TypeDecoder:
   def dec_list_list32(self, bytes):
     return self.dec_compound("!II", bytes)
 
+  def dec_array(self, format, bytes, constructor=identity):
+    (size, count), bytes = self.unpack(format, bytes, lambda s, c: (s, c))
+    result, bytes = self.decode(bytes, count)
+    return constructor(result), bytes
+
   def dec_list_array8(self, bytes):
-    xxx
+    return self.dec_array("!BB", bytes)
 
   def dec_list_array32(self, bytes):
-    xxx
+    return self.dec_array("!II", bytes)
 
   def dec_map(self, elements):
     result = {}
