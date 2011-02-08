@@ -122,7 +122,8 @@ class Link(object):
     self.post_frame(Attach(name = self.name,
                            role = self.role,
                            local = self.local,
-                           remote = self.remote))
+                           remote = self.remote,
+                           initial_transfer_count = self.transfer_count))
     self.post_frame(self._flow())
 
   def do_attach(self, attach):
