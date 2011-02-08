@@ -53,7 +53,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="options" type="options"/>
       <field name="remote-channel" type="ushort"/>
       <field name="next-outgoing-id" type="transfer-number"/>
-      <field name="window-size" type="uint"/>
+      <field name="incoming-window" type="uint"/>
+      <field name="outgoing-window" type="uint"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
       <field name="properties" type="fields"/>
