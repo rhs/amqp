@@ -124,10 +124,13 @@ class Link(object):
                            local = self.local,
                            remote = self.remote,
                            initial_transfer_count = self.transfer_count))
-    self.post_frame(self._flow())
+    if self.role == Receiver.role:
+      self.post_frame(self._flow())
 
   def do_attach(self, attach):
     self.attach_rcvd = True
+    if self.role == Receiver.role:
+      self.transfer_count = attach.initial_transfer_count
     self.remote = attach.local
 
   # XXX: closing and errors
