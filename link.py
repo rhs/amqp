@@ -293,7 +293,7 @@ class Receiver(Link):
     u = self._units(xfr)
     self.link_credit -= u
     self.transfer_count += u
-    self.available -= u
+    self.available = max(0, self.available - u)
 
   def do_flow_state(self, state):
     if self.transfer_count is not None:
