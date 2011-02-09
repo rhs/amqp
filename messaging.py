@@ -19,6 +19,7 @@
 #
 
 from protocol import Fragment, Header, Properties, Footer
+from connection import Connection
 
 class Message:
 
@@ -48,7 +49,7 @@ class Message:
 # XXX: encode(message) -> fragments, decode(transfer) -> message
 # XXX: frag + defrag
 
-def encode(message, encoder):
+def encode(message, encoder=Connection.type_encoder):
   # XXX: constants
   head = Fragment(True, True, 0, 0, 0, encoder.encode(message.header))
   prop = Fragment(True, True, 1, 1, 0, encoder.encode(message.properties))

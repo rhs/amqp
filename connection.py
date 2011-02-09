@@ -35,6 +35,22 @@ class ConnectionError(Exception):
 
 class Connection:
 
+  # XXX: these should go someplace more central
+  type_decoder = TypeDecoder()
+  type_encoder = TypeEncoder()
+
+  for cls in CLASSES:
+    # XXX: should index some of this stuff and move it elsewhere
+    type_encoder.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
+                                                  v.deconstruct())
+    for d in cls.DESCRIPTORS:
+      if cls.SOURCE == "map":
+        const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
+                                              for (k, v) in m.iteritems()]))
+      else:
+        const = lambda d, l, c=cls: c(*l)
+      type_decoder.constructors[d] = const
+
   def __init__(self, factory):
     self.id = "%X" % id(self)
     self.factory = factory
@@ -48,21 +64,6 @@ class Connection:
 
     self.frame_decoder = FrameDecoder()
     self.frame_encoder = FrameEncoder()
-
-    self.type_decoder = TypeDecoder()
-    self.type_encoder = TypeEncoder()
-
-    for cls in CLASSES:
-      # XXX: should index some of this stuff and move it elsewhere
-      self.type_encoder.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
-                                                         v.deconstruct())
-      for d in cls.DESCRIPTORS:
-        if cls.SOURCE == "map":
-          const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
-                                                for (k, v) in m.iteritems()]))
-        else:
-          const = lambda d, l, c=cls: c(*l)
-        self.type_decoder.constructors[d] = const
 
     self.open_rcvd = False
     self.open_sent = False
