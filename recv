@@ -68,7 +68,7 @@ try:
     if opts.sleep:
       time.sleep(opts.sleep)
     lnk.disposition(msg.delivery_tag, ACCEPTED)
-    if lnk.pending() < 10 and lnk.capacity() == 0:
+    if lnk.pending() < 10 and lnk.credit() == 0:
       if opts.count == 0:
         credit = 10
       else:

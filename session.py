@@ -81,13 +81,15 @@ class Session:
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
                           next_outgoing_id = self.outgoing.unsettled_hwm + 1,
-                          incoming_window = 65536, outgoing_window = 65536,
+                          incoming_window = self.incoming.window,
+                          outgoing_window = 65536, # this should NOT be self.outgoingl.window
                           handle_max = 2147483647,
                           properties = self.properties))
 
   def do_begin(self, begin):
     self.begin_rcvd = True
     self.incoming.unsettled_hwm = begin.next_outgoing_id - 1
+    self.outgoing.max_id = self.outgoing.unsettled_hwm + begin.incoming_window - 1
 
   def end(self, error=None):
     if self.end_sent:
@@ -151,6 +153,16 @@ class Session:
         link, tag = delivery
         link.do_disposition(tag, disp.state, disp.settled)
 
+  def do_flow(self, flow):
+    link = self.handles[flow.handle]
+    if link.role == Sender.role:
+      if flow.next_incoming_id is None:
+        start = Outgoing.initial
+      else:
+        start = flow.next_incoming_id
+      self.outgoing.window = start + flow.incoming_window - self.incoming.unsettled_hwm - 1
+    link.write(flow)
+
   def tick(self):
     for link in self.links.values():
       link.tick()
@@ -166,8 +178,11 @@ class DeliveryMap:
     self.unsettled_lwm = None
     # highest unsettled transfer_id
     self.unsettled_hwm = None
-    self.capacity = None
+    self.window = None
     self.init()
+
+  def capacity(self):
+    return self.window
 
   def append(self, link, transfer):
     delivery = (link, transfer.delivery_tag)
@@ -207,7 +222,7 @@ class DeliveryMap:
 class Incoming(DeliveryMap):
 
   def init(self):
-    pass
+    self.window = 65536
 
   def mark(self, transfer):
     if self.unsettled_lwm is None:
@@ -218,9 +233,12 @@ class Incoming(DeliveryMap):
 
 class Outgoing(DeliveryMap):
 
+  initial = 1
+
   def init(self):
-    self.unsettled_lwm = 1
-    self.unsettled_hwm = 0
+    self.unsettled_lwm = self.initial
+    self.unsettled_hwm = self.initial - 1
+    self.window = 0
 
   def mark(self, transfer):
     assert transfer.transfer_id is None

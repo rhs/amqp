@@ -177,6 +177,10 @@ class Link:
     return self.proto.capacity()
 
   @synchronized
+  def credit(self):
+    return self.proto.credit()
+
+  @synchronized
   def disposition(self, delivery_tag, state=None, settled=False):
     self.proto.disposition(delivery_tag, state, settled)
 
@@ -225,7 +229,7 @@ class Receiver(Link):
     return self.proto.pending()
 
   def _pending_unblocked(self):
-    return self.capacity() == 0 or self.proto.pending() > 0
+    return self.credit() == 0 or self.proto.pending() > 0
 
   @synchronized
   def draining(self, block=False, timeout=None):

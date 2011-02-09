@@ -139,7 +139,7 @@ class Broker:
       target.put(xfr.delivery_tag, xfr)
       state = target.settle(xfr.delivery_tag)
       link.settle(xfr.delivery_tag, state)
-    if target.capacity() and link.capacity() < 10: link.flow(10)
+    if target.capacity() and link.credit() < 10: link.flow(10)
 
   def detach_sender(self, link):
     if link.remote is None and link.local:

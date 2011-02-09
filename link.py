@@ -71,6 +71,9 @@ class Link(object):
     self.init()
 
   def capacity(self):
+    return min(self.link_credit, self.session.roles[self.role].capacity())
+
+  def credit(self):
     return self.link_credit
 
   # XXX: should update the naming
@@ -104,7 +107,7 @@ class Link(object):
       next = self.session.incoming.unsettled_hwm + 1
     flow = Flow(handle = self.handle,
                 next_incoming_id = next,
-                incoming_window = 65536,
+                incoming_window = self.session.incoming.window,
                 next_outgoing_id = self.session.outgoing.unsettled_hwm + 1,
                 outgoing_window = 65536,
                 transfer_count = self.transfer_count,
