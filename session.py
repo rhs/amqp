@@ -170,9 +170,10 @@ class Session:
     return self.incoming.window
 
   def set_incoming_window(self, window, policy=SLIDING):
+    old = self.incoming.window
     self.incoming.window = window
     self.incoming.policy = policy
-    if self.begin_sent and not self.end_sent:
+    if window != old and self.begin_sent and not self.end_sent:
       if self.incoming.unsettled_hwm is None:
         next = None
       else:
