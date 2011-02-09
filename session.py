@@ -85,7 +85,7 @@ class Session:
     self.post_frame(Begin(remote_channel = self.remote_channel,
                           next_outgoing_id = self.outgoing.unsettled_hwm + 1,
                           incoming_window = self.incoming.window,
-                          outgoing_window = 65536, # this should NOT be self.outgoingl.window
+                          outgoing_window = 65536, # this should NOT be self.outgoing.window
                           handle_max = 2147483647,
                           properties = self.properties))
 
@@ -161,7 +161,7 @@ class Session:
       start = Outgoing.initial
     else:
       start = flow.next_incoming_id
-    self.outgoing.window = start + flow.incoming_window - self.incoming.unsettled_hwm - 1
+    self.outgoing.window = start + flow.incoming_window - self.outgoing.unsettled_hwm - 1
     if flow.handle is not None:
       link = self.handles[flow.handle]
       link.write(flow)

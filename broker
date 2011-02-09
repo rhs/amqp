@@ -19,7 +19,7 @@
 #
 import optparse, socket
 from connection import Connection
-from session import Session, SessionError
+from session import Session, SessionError, FIXED
 from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
 from queue import Queue
@@ -27,8 +27,10 @@ from util import ConnectionSelectable
 
 class Broker:
 
-  def __init__(self, container_id):
+  def __init__(self, container_id, window, period):
     self.container_id = container_id
+    self.window = window
+    self.period = period
     self.nodes = {}
     self.sources = {}
     self.targets = {}
@@ -40,6 +42,10 @@ class Broker:
     self.detach = {Sender.role: self.detach_sender,
                    Receiver.role: self.detach_receiver}
 
+  def timeout(self, connection):
+    for ssn in connection.incoming.values() + connection.outgoing.values():
+      ssn.set_incoming_window(self.window, FIXED)
+
   def tick(self, connection):
     if connection.opening():
       connection.open(container_id = self.container_id,
@@ -49,10 +55,18 @@ class Broker:
     for ssn in connection.incoming.values():
       if ssn.beginning():
         ssn.begin()
+        if self.period:
+          ssn.set_incoming_window(self.window, FIXED)
+        else:
+          ssn.set_incoming_window(self.window)
 
     for ssn in connection.outgoing.values():
       if ssn.beginning():
         ssn.begin()
+        if self.period:
+          ssn.set_incoming_window(self.window, FIXED)
+        else:
+          ssn.set_incoming_window(self.window)
 
       for link in ssn.links.values():
         if link.opening():
@@ -169,6 +183,10 @@ parser.add_option("-n", "--nodes", default=[], action="append",
                   help="load nodes from specified file")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
+parser.add_option("-w", "--window", type=int, default=65536,
+                  help="session window size")
+parser.add_option("-e", "--period", type=float, default=None,
+                  help="update period for session window")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
 parser.add_option("-T", "--threshold", dest="thresholds", default=[],
@@ -191,13 +209,16 @@ else:
       pass
 
 try:
-  broker = Broker(opts.container)
+  broker = Broker(opts.container, opts.window, opts.period)
   selector = Selector()
   window = Window(lambda *args: selector.stop())
 
   def tick(c):
     broker.tick(c)
     window.redraw()
+
+  def timeout(c):
+    broker.timeout(c)
 
   nodes = {}
   for n in opts.nodes:
@@ -221,7 +242,8 @@ try:
   def handler(accepted):
     conn = Connection(lambda properties: Session(link, properties))
     conn.tracing(*opts.trace.split())
-    selector.register(ConnectionSelectable(accepted, conn, tick))
+    selector.register(ConnectionSelectable(accepted, conn, tick,
+                                           period=opts.period, timeout=timeout))
 
   selector.register(Acceptor(sock, handler))
   if opts.graphics:

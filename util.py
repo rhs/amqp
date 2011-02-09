@@ -17,7 +17,7 @@
 # under the License.
 #
 
-import os, mllib, traceback
+import os, mllib, traceback, time
 
 __SELF__ = object()
 
@@ -93,16 +93,26 @@ def identity(x):
 
 class ConnectionSelectable:
 
-  def __init__(self, socket, connection, tick):
+  def __init__(self, socket, connection, tick, period=None, timeout=lambda c: None):
     self.socket = socket
     self.connection = connection
     self.tick = tick
+    self.period = period
+    self._timeout = timeout
+    if self.period:
+      self._timing = 0
+    else:
+      self._timing = None
 
   def fileno(self):
     return self.socket.fileno()
 
   def timing(self):
-    return None
+    return self._timing
+
+  def timeout(self):
+    self._timing = time.time() + self.period
+    self._timeout(self.connection)
 
   def reading(self):
     return self.socket is not None
