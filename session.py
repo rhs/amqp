@@ -18,8 +18,11 @@
 #
 
 from link import Sender, Receiver
-from protocol import Begin, End
-from util import RangeSet
+from protocol import Begin, End, Flow
+from util import RangeSet, Constant
+
+SLIDING = Constant("SLIDING")
+FIXED = Constant("FIXED")
 
 class SessionError(Exception):
   pass
@@ -154,14 +157,30 @@ class Session:
         link.do_disposition(tag, disp.state, disp.settled)
 
   def do_flow(self, flow):
-    link = self.handles[flow.handle]
-    if link.role == Sender.role:
-      if flow.next_incoming_id is None:
-        start = Outgoing.initial
+    if flow.next_incoming_id is None:
+      start = Outgoing.initial
+    else:
+      start = flow.next_incoming_id
+    self.outgoing.window = start + flow.incoming_window - self.incoming.unsettled_hwm - 1
+    if flow.handle is not None:
+      link = self.handles[flow.handle]
+      link.write(flow)
+
+  def incoming_window(self):
+    return self.incoming.window
+
+  def set_incoming_window(self, window, policy=SLIDING):
+    self.incoming.window = window
+    self.incoming.policy = policy
+    if self.begin_sent and not self.end_sent:
+      if self.incoming.unsettled_hwm is None:
+        next = None
       else:
-        start = flow.next_incoming_id
-      self.outgoing.window = start + flow.incoming_window - self.incoming.unsettled_hwm - 1
-    link.write(flow)
+        next = self.incoming.unsettled_hwm + 1
+      self.post_frame(Flow(next_outgoing_id = self.outgoing.unsettled_hwm + 1,
+                           outgoing_window = self.outgoing.window,
+                           next_incoming_id = next,
+                           incoming_window = self.incoming.window))
 
   def tick(self):
     for link in self.links.values():
@@ -179,12 +198,14 @@ class DeliveryMap:
     # highest unsettled transfer_id
     self.unsettled_hwm = None
     self.window = None
+    self.policy = SLIDING
     self.init()
 
   def capacity(self):
     return self.window
 
   def append(self, link, transfer):
+    self.window -= 1
     delivery = (link, transfer.delivery_tag)
     self.mark(transfer)
     id = transfer.transfer_id
@@ -223,6 +244,11 @@ class Incoming(DeliveryMap):
 
   def init(self):
     self.window = 65536
+
+  def append(self, link, transfer):
+    DeliveryMap.append(self, link, transfer)
+    if self.policy is SLIDING:
+      self.window += 1
 
   def mark(self, transfer):
     if self.unsettled_lwm is None:

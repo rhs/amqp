@@ -20,7 +20,7 @@
 
 import socket
 from connection import Connection as ProtoConnection
-from session import Session as ProtoSession, SessionError
+from session import Session as ProtoSession, SessionError, FIXED, SLIDING
 from link import Link as ProtoLink, Sender as ProtoSender, \
     Receiver as ProtoReceiver, LinkError, link
 from messaging import Message, encode, decode
@@ -143,6 +143,14 @@ class Session:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     return rcv
+
+  @synchronized
+  def incoming_window(self):
+    return self.proto.incoming_window(self)
+
+  @synchronized
+  def set_incoming_window(self, *args, **kwargs):
+    return self.proto.set_incoming_window(*args, **kwargs)
 
   @synchronized
   def close(self):

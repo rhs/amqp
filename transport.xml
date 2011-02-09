@@ -80,13 +80,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="flow" class="composite" source="list" provides="frame">
       <descriptor name="amqp:flow:list" code="0x00000000:0x00000013"/>
       <field name="options" type="options"/>
-      <field name="handle" type="handle" mandatory="true">
-        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
-      </field>
       <field name="next-incoming-id" type="transfer-number"/>
       <field name="incoming-window" type="uint"/>
       <field name="next-outgoing-id" type="transfer-number"/>
       <field name="outgoing-window" type="uint"/>
+      <field name="handle" type="handle">
+        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
+      </field>
       <field name="transfer-count" type="sequence-no"/>
       <field name="link-credit" type="uint"/>
       <field name="available" type="uint"/>
