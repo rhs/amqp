@@ -71,25 +71,18 @@ class Broker:
       for link in ssn.links.values():
         if link.opening():
           if self.attach[link.role](link):
-            link.local = link.remote
             link.attach()
           else:
-            link.local = None
             # XXX
             link.modified = True
             link.attach()
             link.detach()
 
-        # XXX
-        if link.local:
-          self.process[link.role](link)
+        self.process[link.role](link)
 
         if link.closing():
           self.detach[link.role](link)
-          if link.remote:
-            link.detach()
-          else:
-            link.close()
+          link.detach()
 
         if link.closed():
           ssn.remove(link)
@@ -108,12 +101,13 @@ class Broker:
       source = self.sources[link.name]
       source.resume(link.unsettled or {})
       return True
-    elif link.remote.source.address in self.nodes:
-      n = self.nodes[link.remote.source.address]
+    elif link.source.address in self.nodes:
+      n = self.nodes[link.source.address]
       source = n.source()
       self.sources[link.name] = source
       return True
     else:
+      link.source = None
       return False
 
   def attach_receiver(self, link):
@@ -121,17 +115,19 @@ class Broker:
       target = self.targets[link.name]
       target.resume(link.unsettled or {})
       return True
-    elif link.remote.target.address in self.nodes:
-      n = self.nodes[link.remote.target.address]
+    elif link.target.address in self.nodes:
+      n = self.nodes[link.target.address]
       target = n.target()
       self.targets[link.name] = target
       if target.capacity():
         link.flow(20)
       return True
     else:
+      link.target = None
       return False
 
   def process_sender(self, link):
+    if link.source is None: return
     source = self.sources[link.name]
     while link.capacity() > 0:
       tag, xfr = source.get()
@@ -147,6 +143,7 @@ class Broker:
         link.settle(t, state)
 
   def process_receiver(self, link):
+    if link.target is None: return
     target = self.targets[link.name]
     while link.pending():
       xfr = link.get()
@@ -156,12 +153,12 @@ class Broker:
     if target.capacity() and link.credit() < 10: link.flow(10)
 
   def detach_sender(self, link):
-    if link.remote is None and link.local:
+    if link.target is None and link.source:
       source = self.sources.pop(link.name)
       source.close()
 
   def detach_receiver(self, link):
-    if link.remote is None and link.local:
+    if link.source is None and link.target:
       target = self.targets.pop(link.name)
       target.close()
 

@@ -101,6 +101,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   <section name="addressing">
     <type name="source" class="composite" source="map" provides="source">
       <descriptor name="amqp:source:map" code="0x00000000:0x00000028"/>
+      <field name="tag" type="binary"/>
       <field name="address" type="*" requires="address">
         <error name="address-not-found" type="amqp-error" value="not-found"/>
       </field>
@@ -116,6 +117,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="target" class="composite" source="map" provides="target">
       <descriptor name="amqp:target:map" code="0x00000000:0x00000029"/>
+      <field name="tag" type="binary"/>
       <field name="address" type="*" requires="address">
         <error name="address-not-found" type="amqp-error" value="not-found"/>
       </field>

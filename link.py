@@ -42,10 +42,10 @@ class State:
 
 class Link(object):
 
-  def __init__(self, name, local, remote=None):
+  def __init__(self, name, source, target):
     self.name = name
-    self.local = local
-    self.remote = remote
+    self.source = source
+    self.target = target
 
     self.session = None
     self.handle = None
@@ -124,8 +124,8 @@ class Link(object):
     self.attach_sent = True
     self.post_frame(Attach(name = self.name,
                            role = self.role,
-                           local = self.local,
-                           remote = self.remote,
+                           source = self.source,
+                           target = self.target,
                            initial_transfer_count = self.transfer_count))
     if self.role == Receiver.role:
       self.post_frame(self._flow())
@@ -134,7 +134,8 @@ class Link(object):
     self.attach_rcvd = True
     if self.role == Receiver.role:
       self.transfer_count = attach.initial_transfer_count
-    self.remote = attach.local
+    self.source = attach.source
+    self.target = attach.target
 
   # XXX: closing and errors
   def detach(self):
@@ -142,17 +143,19 @@ class Link(object):
       raise LinkError("not attached")
     # process any outstanding work before detaching
     self.tick()
-    self.post_frame(Detach(local=self.local, remote=self.remote))
+    self.post_frame(Detach(source=self.source, target=self.target))
     self.detach_sent = True
     self.handle = None
 
   def close(self):
-    self.local = None
+    self.source = None
+    self.target = None
     self.detach()
 
   def do_detach(self, detach):
     self.detach_rcvd = True
-    self.remote = detach.local
+    self.source = detach.source
+    self.target = detach.target
 
   def do_disposition(self, delivery_tag, state, settled):
     if delivery_tag in self.unsettled:
@@ -325,4 +328,4 @@ ROLES = {
 
 def link(attach):
   cls = ROLES[not attach.role]
-  return cls(attach.name, attach.remote, attach.local)
+  return cls(attach.name, attach.source, attach.target)

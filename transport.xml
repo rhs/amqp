@@ -39,8 +39,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="options" type="options"/>
       <field name="container-id" type="string" mandatory="true"/>
       <field name="hostname" type="string"/>
-      <field name="max-frame-size" type="uint"/>
-      <field name="channel-max" type="ushort" mandatory="true"/>
+      <field name="max-frame-size" type="uint" default="4294967295"/>
+      <field name="channel-max" type="ushort" default="65535"/>
       <field name="heartbeat-interval" type="seconds"/>
       <field name="outgoing-locales" type="string" multiple="true"/>
       <field name="incoming-locales" type="string" multiple="true"/>
@@ -55,7 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="next-outgoing-id" type="transfer-number" mandatory="true"/>
       <field name="incoming-window" type="uint" mandatory="true"/>
       <field name="outgoing-window" type="uint" mandatory="true"/>
-      <field name="handle-max" type="handle" mandatory="true"/>
+      <field name="handle-max" type="handle" default="4294967295"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
       <field name="properties" type="fields"/>
@@ -68,30 +68,30 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         <error name="handle-busy" type="amqp-error" value="invalid-field"/>
       </field>
       <field name="role" type="role" mandatory="true"/>
-      <field name="local" type="linkage"/>
-      <field name="remote" type="linkage"/>
+      <field name="source" type="*" requires="source"/>
+      <field name="target" type="*" requires="target"/>
       <field name="unsettled" type="map"/>
       <field name="initial-transfer-count" type="sequence-no"/>
       <field name="transfer-unit" type="ulong"/>
       <field name="max-message-size" type="ulong"/>
-      <field name="error-mode" type="error-mode"/>
+      <field name="error-mode" type="error-mode" default="end"/>
       <field name="properties" type="fields"/>
     </type>
     <type name="flow" class="composite" source="list" provides="frame">
       <descriptor name="amqp:flow:list" code="0x00000000:0x00000013"/>
       <field name="options" type="options"/>
       <field name="next-incoming-id" type="transfer-number"/>
-      <field name="incoming-window" type="uint"/>
-      <field name="next-outgoing-id" type="transfer-number"/>
-      <field name="outgoing-window" type="uint"/>
+      <field name="incoming-window" type="uint" mandatory="true"/>
+      <field name="next-outgoing-id" type="transfer-number" mandatory="true"/>
+      <field name="outgoing-window" type="uint" mandatory="true"/>
       <field name="handle" type="handle">
         <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
       </field>
       <field name="transfer-count" type="sequence-no"/>
       <field name="link-credit" type="uint"/>
       <field name="available" type="uint"/>
-      <field name="drain" type="boolean"/>
-      <field name="echo" type="boolean"/>
+      <field name="drain" type="boolean" default="false"/>
+      <field name="echo" type="boolean" default="false"/>
     </type>
     <type name="transfer" class="composite" source="list" provides="frame">
       <descriptor name="amqp:transfer:list" code="0x00000000:0x00000014"/>
@@ -101,30 +101,30 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       </field>
       <field name="delivery-tag" type="delivery-tag" mandatory="true"/>
       <field name="transfer-id" type="transfer-number" mandatory="true"/>
-      <field name="settled" type="boolean"/>
-      <field name="state" type="*"/>
-      <field name="resume" type="boolean"/>
-      <field name="more" type="boolean"/>
-      <field name="aborted" type="boolean"/>
-      <field name="batchable" type="boolean"/>
+      <field name="settled" type="boolean" default="false"/>
+      <field name="state" type="*" requires="transfer-state"/>
+      <field name="resume" type="boolean" default="false"/>
+      <field name="more" type="boolean" default="false"/>
+      <field name="aborted" type="boolean" default="false"/>
+      <field name="batchable" type="boolean" default="false"/>
       <field name="fragments" type="fragment" multiple="true"/>
     </type>
     <type name="disposition" class="composite" source="list" provides="frame">
       <descriptor name="amqp:disposition:list" code="0x00000000:0x00000015"/>
       <field name="options" type="options"/>
       <field name="role" type="role" mandatory="true"/>
-      <field name="batchable" type="boolean"/>
+      <field name="batchable" type="boolean" default="false"/>
       <field name="first" type="transfer-number" mandatory="true"/>
       <field name="last" type="transfer-number"/>
-      <field name="settled" type="boolean"/>
+      <field name="settled" type="boolean" default="false"/>
       <field name="state" type="*" requires="transfer-state"/>
     </type>
     <type name="detach" class="composite" source="list" provides="frame">
       <descriptor name="amqp:detach:list" code="0x00000000:0x00000016"/>
       <field name="options" type="options"/>
       <field name="handle" type="handle" mandatory="true"/>
-      <field name="local" type="linkage"/>
-      <field name="remote" type="linkage"/>
+      <field name="source" type="*" requires="source"/>
+      <field name="target" type="*" requires="target"/>
       <field name="error" type="error"/>
     </type>
     <type name="end" class="composite" source="list" provides="frame">
@@ -144,22 +144,17 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <choice name="receiver" value="true"/>
     </type>
     <type name="handle" class="restricted" source="uint"/>
-    <type name="linkage" class="composite" source="list">
-      <descriptor name="amqp:linkage:list" code="0x00000000:0x00000019"/>
-      <field name="source" type="*" requires="source"/>
-      <field name="target" type="*" requires="target"/>
-    </type>
     <type name="seconds" class="restricted" source="uint"/>
     <type name="delivery-tag" class="restricted" source="binary"/>
     <type name="transfer-number" class="restricted" source="sequence-no"/>
     <type name="sequence-no" class="restricted" source="uint"/>
     <type name="fragment" class="composite" source="list">
       <descriptor name="amqp:fragment:list" code="0x00000000:0x0000001c"/>
-      <field name="first" type="boolean"/>
-      <field name="last" type="boolean"/>
-      <field name="format-code" type="uint"/>
-      <field name="section-number" type="uint"/>
-      <field name="section-offset" type="ulong"/>
+      <field name="first" type="boolean" mandatory="true"/>
+      <field name="last" type="boolean" mandatory="true"/>
+      <field name="format-code" type="uint" mandatory="true"/>
+      <field name="section-number" type="uint" mandatory="true"/>
+      <field name="section-offset" type="ulong" default="0"/>
       <field name="payload" type="binary"/>
     </type>
     <type name="fields" class="restricted" source="map"/>

@@ -29,7 +29,7 @@ from util import ConnectionSelectable, Constant
 from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
-from protocol import Linkage, Source, Target, ACCEPTED
+from protocol import Source, Target, ACCEPTED
 
 class Timeout(Exception):
   pass
@@ -122,24 +122,25 @@ class Session:
 
   @synchronized
   def sender(self, target, name=None):
-    snd = Sender(self.connection, name or str(uuid4()), Target(target))
+    snd = Sender(self.connection, name or str(uuid4()), Target(address=target))
     self.proto.add(snd.proto)
     snd.proto.attach()
     self.wait(lambda: snd.proto.opened() or snd.proto.closing())
-    if snd.proto.remote is None:
+    if snd.proto.target is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
     return snd
 
   @synchronized
   def receiver(self, source, limit=0, drain=False, name=None):
-    rcv = Receiver(self.connection, name or str(uuid4()), Source(source))
+    rcv = Receiver(self.connection, name or str(uuid4()),
+                   Source(address=source))
     self.proto.add(rcv.proto)
     if limit:
       rcv.flow(limit, drain=drain)
     rcv.proto.attach()
     self.wait(lambda: rcv.proto.opened() or rcv.proto.closing())
-    if rcv.proto.remote is None:
+    if rcv.proto.source is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     return rcv
@@ -211,7 +212,7 @@ class Sender(Link):
 
   def __init__(self, connection, name, target):
     Link.__init__(self, connection)
-    self.proto = ProtoSender(name, Linkage(None, target))
+    self.proto = ProtoSender(name, None, target)
 
   @synchronized
   def send(self, message=None, delivery_tag=None, **kwargs):
@@ -224,7 +225,7 @@ class Receiver(Link):
 
   def __init__(self, connection, name, source):
     Link.__init__(self, connection)
-    self.proto = ProtoReceiver(name, Linkage(source, None))
+    self.proto = ProtoReceiver(name, source, None)
 
   @synchronized
   def flow(self, limit, drain=False):
