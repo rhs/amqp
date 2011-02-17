@@ -100,30 +100,40 @@ class Broker:
     if link.name in self.sources:
       source = self.sources[link.name]
       source.resume(link.unsettled or {})
+      # XXX: should actually set this to reflect the real source and
+      # possibly update the real source
+      link.source = link.remote_source
+      link.target = link.remote_target
       return True
-    elif link.source.address in self.nodes:
-      n = self.nodes[link.source.address]
+    elif link.remote_source.address in self.nodes:
+      n = self.nodes[link.remote_source.address]
       source = n.source()
       self.sources[link.name] = source
+      link.source = link.remote_source
+      link.target = link.remote_target
       return True
     else:
-      link.source = None
       return False
 
   def attach_receiver(self, link):
     if link.name in self.targets:
       target = self.targets[link.name]
       target.resume(link.unsettled or {})
+      link.source = link.remote_source
+      # XXX: should actually set this to reflect the real target and
+      # possibly update the real target
+      link.target = link.remote_target
       return True
-    elif link.target.address in self.nodes:
+    elif link.remote_target.address in self.nodes:
       n = self.nodes[link.target.address]
       target = n.target()
       self.targets[link.name] = target
       if target.capacity():
         link.flow(20)
+      link.source = link.remote_source
+      link.target = link.remote_target
       return True
     else:
-      link.target = None
       return False
 
   def process_sender(self, link):
@@ -153,14 +163,18 @@ class Broker:
     if target.capacity() and link.credit() < 10: link.flow(10)
 
   def detach_sender(self, link):
-    if link.target is None and link.source:
+    if link.source and link.remote_source is None:
       source = self.sources.pop(link.name)
       source.close()
+      link.source = link.remote_source
+      link.target = link.remote_target
 
   def detach_receiver(self, link):
-    if link.source is None and link.target:
+    if link.target and link.remote_target is None:
       target = self.targets.pop(link.name)
       target.close()
+      link.source = link.remote_source
+      link.target = link.remote_target
 
 def bind(host, port):
   sock = socket.socket()

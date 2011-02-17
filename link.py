@@ -46,6 +46,8 @@ class Link(object):
     self.name = name
     self.source = source
     self.target = target
+    self.remote_source = None
+    self.remote_target = None
 
     self.session = None
     self.handle = None
@@ -133,8 +135,8 @@ class Link(object):
     self.attach_rcvd = True
     if self.role == Receiver.role:
       self.transfer_count = attach.initial_transfer_count
-    self.source = attach.source
-    self.target = attach.target
+    self.remote_source = attach.source
+    self.remote_target = attach.target
 
   # XXX: closing and errors
   def detach(self):
@@ -153,8 +155,8 @@ class Link(object):
 
   def do_detach(self, detach):
     self.detach_rcvd = True
-    self.source = detach.source
-    self.target = detach.target
+    self.remote_source = detach.source
+    self.remote_target = detach.target
 
   def do_disposition(self, delivery_tag, state, settled):
     if delivery_tag in self.unsettled:
