@@ -69,7 +69,7 @@ class Broker:
           ssn.set_incoming_window(self.window)
 
       for link in ssn.links.values():
-        if link.opening():
+        if link.attaching():
           if self.attach[link.role](link):
             link.attach()
           else:
@@ -80,11 +80,11 @@ class Broker:
 
         self.process[link.role](link)
 
-        if link.closing():
+        if link.detaching():
           self.detach[link.role](link)
           link.detach()
 
-        if link.closed():
+        if link.detached():
           ssn.remove(link)
 
       if ssn.ending():

@@ -125,7 +125,7 @@ class Session:
     snd = Sender(self.connection, name or str(uuid4()), Target(address=target))
     self.proto.add(snd.proto)
     snd.proto.attach()
-    self.wait(lambda: snd.proto.opened() or snd.proto.closing())
+    self.wait(lambda: snd.proto.attached() or snd.proto.detaching())
     if snd.proto.target is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
@@ -139,7 +139,7 @@ class Session:
     if limit:
       rcv.flow(limit, drain=drain)
     rcv.proto.attach()
-    self.wait(lambda: rcv.proto.opened() or rcv.proto.closing())
+    self.wait(lambda: rcv.proto.attached() or rcv.proto.attaching())
     if rcv.proto.source is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
@@ -201,12 +201,12 @@ class Link:
   def detach(self):
     self.proto.detach()
     # XXX
-    self.wait(self.proto.closed)
+    self.wait(self.proto.detached)
 
   @synchronized
   def close(self):
     self.proto.close()
-    self.wait(self.proto.closed)
+    self.wait(self.proto.detached)
 
 class Sender(Link):
 

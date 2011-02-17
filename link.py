@@ -76,17 +76,16 @@ class Link(object):
   def credit(self):
     return self.link_credit
 
-  # XXX: should update the naming
-  def opening(self):
+  def attaching(self):
     return self.attach_rcvd and not self.attach_sent
 
-  def closing(self):
+  def detaching(self):
     return self.detach_rcvd and not self.detach_sent
 
-  def opened(self):
+  def attached(self):
     return self.attach_sent and self.attach_rcvd
 
-  def closed(self):
+  def detached(self):
     return self.detach_sent and self.detach_rcvd
 
   def write(self, body):
