@@ -42,7 +42,7 @@ class State:
 
 class Link(object):
 
-  def __init__(self, name, source, target):
+  def __init__(self, name, source=None, target=None):
     self.name = name
     self.source = source
     self.target = target
@@ -329,4 +329,4 @@ ROLES = {
 
 def link(attach):
   cls = ROLES[not attach.role]
-  return cls(attach.name, attach.source, attach.target)
+  return cls(attach.name)

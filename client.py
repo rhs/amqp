@@ -126,7 +126,7 @@ class Session:
     self.proto.add(snd.proto)
     snd.proto.attach()
     self.wait(lambda: snd.proto.attached() or snd.proto.detaching())
-    if snd.proto.target is None:
+    if snd.proto.remote_target is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
     return snd
@@ -140,7 +140,7 @@ class Session:
       rcv.flow(limit, drain=drain)
     rcv.proto.attach()
     self.wait(lambda: rcv.proto.attached() or rcv.proto.attaching())
-    if rcv.proto.source is None:
+    if rcv.proto.remote_source is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     return rcv

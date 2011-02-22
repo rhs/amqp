@@ -125,7 +125,7 @@ class Broker:
       link.target = link.remote_target
       return True
     elif link.remote_target.address in self.nodes:
-      n = self.nodes[link.target.address]
+      n = self.nodes[link.remote_target.address]
       target = n.target()
       self.targets[link.name] = target
       if target.capacity():
