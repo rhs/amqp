@@ -17,23 +17,18 @@
 # under the License.
 #
 
-import inspect, mllib, os, struct, sys
 from protocol import *
 
-from framing import AMQP_FRAME, Frame, FrameDecoder, FrameEncoder
+from dispatcher import Dispatcher
 from codec import TypeDecoder, TypeEncoder
-from util import Buffer, parse, pythonize
+from util import pythonize
 from uuid import uuid4
 
-
-PROTO_HDR_FMT = "!4sBBBB"
-PROTO_HDR_SIZE = struct.calcsize(PROTO_HDR_FMT)
-assert PROTO_HDR_SIZE == 8
 
 class ConnectionError(Exception):
   pass
 
-class Connection:
+class Connection(Dispatcher):
 
   # XXX: these should go someplace more central
   type_decoder = TypeDecoder()
@@ -52,18 +47,8 @@ class Connection:
       type_decoder.constructors[d] = const
 
   def __init__(self, factory):
-    self.id = "%X" % id(self)
+    Dispatcher.__init__(self)
     self.factory = factory
-    self._tracing = set()
-    self.tracing(*os.environ.get("AMQP_TRACE", "").split())
-    self.multiline = False
-    self.input = Buffer()
-    self.output = Buffer(struct.pack(PROTO_HDR_FMT, "AMQP", 0, 1, 0, 0))
-
-    self.state = self.__proto_header
-
-    self.frame_decoder = FrameDecoder()
-    self.frame_encoder = FrameEncoder()
 
     self.open_rcvd = False
     self.open_sent = False
@@ -74,24 +59,6 @@ class Connection:
     self.incoming = {}
     # outgoing channel -> session
     self.outgoing = {}
-
-  def tracing(self, *args, **kwargs):
-    names = set(args)
-    for n in kwargs:
-      if kwargs[n]: names.add(n)
-    if "err" not in kwargs:
-      names.add("err")
-    self._tracing = names
-
-  def trace(self, category, format, *args):
-    if category in self._tracing:
-      prefix = "[%s %s]" % (self.id, category)
-      if args:
-        message = format % args
-      else:
-        message = format
-      print >> sys.stderr, prefix, \
-          message.replace(os.linesep, "%s%s " % (os.linesep, prefix))
 
   def opening(self):
     return self.open_rcvd and not self.open_sent
@@ -106,60 +73,15 @@ class Connection:
   def closing(self):
     return self.close_rcvd and not self.close_sent
 
-  def write(self, bytes):
-    self.trace("raw", "RECV: %r", bytes)
-    self.input.write(bytes)
-    self.state = parse(self.state)
-
-  def __proto_header(self):
-    if self.input.pending() >= PROTO_HDR_SIZE:
-      hdr = self.input.read(PROTO_HDR_SIZE)
-      magic, proto, major, minor, revision = struct.unpack(PROTO_HDR_FMT, hdr)
-      if (magic, proto, major, minor, revision) == ("AMQP", 0, 1, 0, 0):
-        return self.__framing
-      else:
-        raise ValueError("bad protocol header")
-
-  def __framing(self):
-    self.frame_decoder.write(self.input.read())
-    for f in self.frame_decoder.read():
-      self.process_frame(f)
-
-  def process_frame(self, f):
-    body, remainder = self.type_decoder.decode(f.payload)
-    assert remainder == ""
-    self.trace("frm", "RECV[%s]: %s", f.channel, body.format(self.multiline))
-    getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
-
   def unhandled(self, channel, body):
     ssn = self.incoming[channel]
     ssn.write(body)
-
-  def read(self, n=None):
-    self.tick()
-    result = self.output.read(n)
-    self.trace("raw", "SENT: %r", result)
-    return result
-
-  def peek(self, n=None):
-    return self.output.peek(n)
-
-  def pending(self):
-    self.tick()
-    return self.output.pending()
 
   def tick(self):
     for ch, ssn in self.outgoing.items():
       ssn.tick()
       for body in ssn.read():
         self.post_frame(ssn.channel, body)
-
-  def post_frame(self, channel, body):
-    assert not self.close_sent
-    self.trace("frm", "SENT[%s]: %s", channel, body.format(self.multiline))
-    f = Frame(AMQP_FRAME, channel, None, self.type_encoder.encode(body))
-    self.frame_encoder.write(f)
-    self.output.write(self.frame_encoder.read())
 
   def open(self, *args, **kwargs):
     self.post_frame(0, Open(*args, **kwargs))
