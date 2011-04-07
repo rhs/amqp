@@ -17,11 +17,8 @@
 # under the License.
 #
 
-from protocol import *
-
 from dispatcher import Dispatcher
-from codec import TypeDecoder, TypeEncoder
-from util import pythonize
+from protocol import *
 from uuid import uuid4
 
 
@@ -30,24 +27,11 @@ class ConnectionError(Exception):
 
 class Connection(Dispatcher):
 
-  # XXX: these should go someplace more central
-  type_decoder = TypeDecoder()
-  type_encoder = TypeEncoder()
-
-  for cls in CLASSES:
-    # XXX: should index some of this stuff and move it elsewhere
-    type_encoder.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
-                                                  v.deconstruct())
-    for d in cls.DESCRIPTORS:
-      if cls.SOURCE == "map":
-        const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
-                                              for (k, v) in m.iteritems()]))
-      else:
-        const = lambda d, l, c=cls: c(*l)
-      type_decoder.constructors[d] = const
+  type_decoder = PROTOCOL_DECODER
+  type_encoder = PROTOCOL_ENCODER
 
   def __init__(self, factory):
-    Dispatcher.__init__(self)
+    Dispatcher.__init__(self, 0)
     self.factory = factory
 
     self.open_rcvd = False
@@ -59,6 +43,10 @@ class Connection(Dispatcher):
     self.incoming = {}
     # outgoing channel -> session
     self.outgoing = {}
+
+  def post_frame(self, channel, body):
+    assert not self.close_sent
+    return Dispatcher.post_frame(self, channel, body)
 
   def opening(self):
     return self.open_rcvd and not self.open_sent

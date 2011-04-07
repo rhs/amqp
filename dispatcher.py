@@ -19,7 +19,7 @@
 
 import os, struct, sys
 
-from framing import AMQP_FRAME, Frame, FrameDecoder, FrameEncoder
+from framing import AMQP_FRAME, Frame, encode, decode
 from util import Buffer, parse
 
 
@@ -29,18 +29,16 @@ assert PROTO_HDR_SIZE == 8
 
 class Dispatcher:
 
-  def __init__(self):
+  def __init__(self, protocol_id):
+    self.protocol_id = protocol_id
     self.id = "%X" % id(self)
     self._tracing = set()
     self.tracing(*os.environ.get("AMQP_TRACE", "").split())
     self.multiline = False
     self.input = Buffer()
-    self.output = Buffer(struct.pack(PROTO_HDR_FMT, "AMQP", 0, 1, 0, 0))
+    self.output = Buffer(struct.pack(PROTO_HDR_FMT, "AMQP", self.protocol_id, 1, 0, 0))
 
     self.state = self.__proto_header
-
-    self.frame_decoder = FrameDecoder()
-    self.frame_encoder = FrameEncoder()
 
   def tracing(self, *args, **kwargs):
     names = set(args)
@@ -69,28 +67,32 @@ class Dispatcher:
     if self.input.pending() >= PROTO_HDR_SIZE:
       hdr = self.input.read(PROTO_HDR_SIZE)
       magic, proto, major, minor, revision = struct.unpack(PROTO_HDR_FMT, hdr)
-      if (magic, proto, major, minor, revision) == ("AMQP", 0, 1, 0, 0):
+      if (magic, proto, major, minor, revision) == ("AMQP", self.protocol_id, 1, 0, 0):
         return self.__framing
       else:
         raise ValueError("bad protocol header")
 
   def __framing(self):
-    self.frame_decoder.write(self.input.read())
-    for f in self.frame_decoder.read():
-      self.process_frame(f)
+    while True:
+      f, n = decode(self.input.peek())
+      if f:
+        self.input.read(n)
+        state = self.process_frame(f)
+        if state is not None:
+          return state
+      else:
+        break
 
   def process_frame(self, f):
     body, remainder = self.type_decoder.decode(f.payload)
     assert remainder == ""
     self.trace("frm", "RECV[%s]: %s", f.channel, body.format(self.multiline))
-    getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
+    return getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
 
   def post_frame(self, channel, body):
-    assert not self.close_sent
     self.trace("frm", "SENT[%s]: %s", channel, body.format(self.multiline))
     f = Frame(AMQP_FRAME, channel, None, self.type_encoder.encode(body))
-    self.frame_encoder.write(f)
-    self.output.write(self.frame_encoder.read())
+    self.output.write(encode(f))
 
   def read(self, n=None):
     self.tick()

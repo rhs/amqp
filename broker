@@ -19,6 +19,7 @@
 #
 import optparse, socket
 from connection import Connection
+from sasl import SASL
 from session import Session, SessionError, FIXED
 from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
@@ -46,7 +47,12 @@ class Broker:
     for ssn in connection.incoming.values() + connection.outgoing.values():
       ssn.set_incoming_window(self.window, FIXED)
 
-  def tick(self, connection):
+  def tick(self, sasl):
+    sasl.tick()
+    if sasl.outcome != 0:
+      return
+
+    connection = sasl.connection
     if connection.opening():
       connection.open(container_id = self.container_id,
                       channel_max = 65535)
@@ -192,6 +198,8 @@ parser.add_option("-c", "--container", default=socket.gethostname(),
                   help="container-id for the broker (default %default)")
 parser.add_option("-n", "--nodes", default=[], action="append",
                   help="load nodes from specified file")
+parser.add_option("-u", "--users", default=[], action="append",
+                  help="load user definitions from specified file")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
 parser.add_option("-w", "--window", type=int, default=65536,
@@ -220,6 +228,10 @@ else:
       pass
 
 try:
+  mechanisms = ["ANONYMOUS", "PLAIN"]
+  passwords = {}
+  for u in opts.users:
+    exec open(u) in globals(), passwords
   broker = Broker(opts.container, opts.window, opts.period)
   selector = Selector()
   window = Window(lambda *args: selector.stop())
@@ -252,8 +264,12 @@ try:
 
   def handler(accepted):
     conn = Connection(lambda properties: Session(link, properties))
-    conn.tracing(*opts.trace.split())
-    selector.register(ConnectionSelectable(accepted, conn, tick,
+    sasl = SASL(conn)
+    traces = opts.trace.split()
+    conn.tracing(*traces)
+    sasl.tracing(*traces)
+    sasl.server(mechanisms, passwords=passwords)
+    selector.register(ConnectionSelectable(accepted, sasl, tick,
                                            period=opts.period, timeout=timeout))
 
   selector.register(Acceptor(sock, handler))

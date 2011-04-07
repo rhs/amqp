@@ -20,6 +20,7 @@
 
 import socket
 from connection import Connection as ProtoConnection
+from sasl import SASL
 from session import Session as ProtoSession, SessionError, FIXED, SLIDING
 from link import Link as ProtoLink, Sender as ProtoSender, \
     Receiver as ProtoReceiver, LinkError, link
@@ -40,6 +41,7 @@ class Connection:
 
   def __init__(self):
     self.proto = ProtoConnection(self.session)
+    self.sasl = SASL(self.proto)
     self._lock = RLock()
     self.condition = Condition(self._lock)
     self.waiter = Waiter(self.condition)
@@ -48,6 +50,7 @@ class Connection:
 
   def tracing(self, *args, **kwargs):
     self.proto.tracing(*args, **kwargs)
+    self.sasl.tracing(*args, **kwargs)
 
   def trace(self, *args, **kwargs):
     self.proto.trace(*args, **kwargs)
@@ -61,23 +64,24 @@ class Connection:
 
   @synchronized
   def pending(self):
-    return self.proto.pending()
+    return self.sasl.pending()
 
   @synchronized
   def peek(self, n=None):
-    return self.proto.peek(n)
+    return self.sasl.peek(n)
 
   @synchronized
   def read(self, n=None):
-    return self.proto.read(n)
+    return self.sasl.read(n)
 
   @synchronized
   def write(self, bytes):
-    self.proto.write(bytes)
+    self.sasl.write(bytes)
 
   @synchronized
   def tick(self, connection):
     self.proto.tick()
+    self.sasl.tick()
     self.waiter.notify()
 
   @synchronized
@@ -86,7 +90,13 @@ class Connection:
       kwargs["container_id"] = str(uuid4())
     if "channel_max" not in kwargs:
       kwargs["channel_max"] = 65535
+    self.sasl.client(mechanism=kwargs.pop("mechanism", "ANONYMOUS"),
+                     username=kwargs.pop("username", None),
+                     password=kwargs.pop("password", None))
     self.proto.open(**kwargs)
+    self.wait(lambda: self.sasl.outcome is not None)
+    if self.sasl.outcome != 0:
+      raise Exception("authentication failed: %s" % self.sasl.outcome)
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
