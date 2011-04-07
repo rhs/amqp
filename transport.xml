@@ -41,7 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="hostname" type="string"/>
       <field name="max-frame-size" type="uint" default="4294967295"/>
       <field name="channel-max" type="ushort" default="65535"/>
-      <field name="heartbeat-interval" type="seconds"/>
+      <field name="idle-time-out" type="milliseconds"/>
       <field name="outgoing-locales" type="string" multiple="true"/>
       <field name="incoming-locales" type="string" multiple="true"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
@@ -72,9 +72,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="target" type="*" requires="target"/>
       <field name="unsettled" type="map"/>
       <field name="initial-transfer-count" type="sequence-no"/>
-      <field name="transfer-unit" type="ulong"/>
       <field name="max-message-size" type="ulong"/>
-      <field name="error-mode" type="error-mode" default="end"/>
+      <field name="offered-capabilities" type="symbol" multiple="true"/>
+      <field name="desired-capabilities" type="symbol" multiple="true"/>
       <field name="properties" type="fields"/>
     </type>
     <type name="flow" class="composite" source="list" provides="frame">
@@ -107,6 +107,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="more" type="boolean" default="false"/>
       <field name="aborted" type="boolean" default="false"/>
       <field name="batchable" type="boolean" default="false"/>
+      <field name="message-format" type="message-format" mandatory="true"/>
       <field name="fragments" type="fragment" multiple="true"/>
     </type>
     <type name="disposition" class="composite" source="list" provides="frame">
@@ -123,8 +124,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <descriptor name="amqp:detach:list" code="0x00000000:0x00000016"/>
       <field name="options" type="options"/>
       <field name="handle" type="handle" mandatory="true"/>
-      <field name="source" type="*" requires="source"/>
-      <field name="target" type="*" requires="target"/>
+      <field name="closed" type="boolean" default="false"/>
       <field name="error" type="error"/>
     </type>
     <type name="end" class="composite" source="list" provides="frame">
@@ -145,14 +145,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="handle" class="restricted" source="uint"/>
     <type name="seconds" class="restricted" source="uint"/>
+    <type name="milliseconds" class="restricted" source="uint"/>
     <type name="delivery-tag" class="restricted" source="binary"/>
     <type name="transfer-number" class="restricted" source="sequence-no"/>
     <type name="sequence-no" class="restricted" source="uint"/>
+    <type name="message-format" class="restricted" source="uint"/>
     <type name="fragment" class="composite" source="list">
       <descriptor name="amqp:fragment:list" code="0x00000000:0x0000001c"/>
       <field name="first" type="boolean" mandatory="true"/>
       <field name="last" type="boolean" mandatory="true"/>
-      <field name="format-code" type="uint" mandatory="true"/>
+      <field name="section-code" type="uint" mandatory="true"/>
       <field name="section-number" type="uint" mandatory="true"/>
       <field name="section-offset" type="ulong" default="0"/>
       <field name="payload" type="binary"/>
@@ -160,10 +162,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="fields" class="restricted" source="map"/>
     <type name="options" class="restricted" source="fields">
       <error name="unknown-option" type="amqp-error" value="not-implemented"/>
-    </type>
-    <type name="error-mode" class="restricted" source="symbol">
-      <choice name="detach" value="detach"/>
-      <choice name="end" value="end"/>
     </type>
     <type name="error" class="composite" source="list">
       <descriptor name="amqp:error:list" code="0x00000000:0x0000001d"/>
@@ -190,8 +188,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <choice name="framing-error" value="amqp:connection:framing-error"/>
     </type>
     <type name="session-error" class="restricted" source="symbol" provides="error">
-      <choice name="unsettled-limit-exceeded" value="amqp:session:unsettled-limit-exceeded"/>
-      <choice name="link-error" value="amqp:session:link-error"/>
+      <choice name="window-violation" value="amqp:session:window-violation"/>
+      <choice name="errant-link" value="amqp:session:errant-link"/>
     </type>
     <type name="link-error" class="restricted" source="symbol" provides="error">
       <choice name="detach-forced" value="amqp:link:detach-forced"/>
@@ -199,6 +197,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <choice name="message-size-exceeded" value="amqp:link:message-size-exceeded"/>
     </type>
     <definition name="PORT" value="5672"/>
+    <definition name="SECURE-PORT" value="5671"/>
     <definition name="MAJOR" value="1"/>
     <definition name="MINOR" value="0"/>
     <definition name="REVISION" value="0"/>

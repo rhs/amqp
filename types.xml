@@ -81,6 +81,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="decimal64" class="primitive">
       <encoding name="ieee-754" code="0x84" category="fixed" width="8"/>
     </type>
+    <type name="decimal128" class="primitive">
+      <encoding name="ieee-754" code="0x94" category="fixed" width="16"/>
+    </type>
     <type name="char" class="primitive">
       <encoding name="utf32" code="0x73" category="fixed" width="4"/>
     </type>

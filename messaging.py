@@ -65,6 +65,6 @@ def decode(transfer, decoder):
   message.properties = decoder.decode(fragments[1].payload)[0]
   message.content = fragments[2].payload
   # XXX: constants
-  if fragments[-1].format_code == 2:
+  if fragments[-1].section_code == 2:
     message.footer = decoder.decode(fragments[-1].payload)[0]
   return message

@@ -139,24 +139,25 @@ class Link(object):
     self.remote_target = attach.target
 
   # XXX: closing and errors
-  def detach(self):
+  def detach(self, closed=False):
     if self.detach_sent:
       raise LinkError("not attached")
     # process any outstanding work before detaching
     self.tick()
-    self.post_frame(Detach(source=self.source, target=self.target))
+    self.post_frame(Detach(closed=closed))
     self.detach_sent = True
     self.handle = None
 
   def close(self):
     self.source = None
     self.target = None
-    self.detach()
+    self.detach(True)
 
   def do_detach(self, detach):
     self.detach_rcvd = True
-    self.remote_source = detach.source
-    self.remote_target = detach.target
+    if detach.closed:
+      self.remote_source = None
+      self.remote_target = None
 
   def do_disposition(self, delivery_tag, state, settled):
     if delivery_tag in self.unsettled:

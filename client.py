@@ -228,6 +228,7 @@ class Sender(Link):
   def send(self, message=None, delivery_tag=None, **kwargs):
     self.wait(self.capacity)
     if message:
+      kwargs["message_format"] = 0
       kwargs["fragments"] = encode(message, self.connection.proto.type_encoder)
     return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 

@@ -151,7 +151,9 @@ class Broker:
         link.drained()
         break
       else:
-        link.send(delivery_tag = tag, fragments = xfr.fragments)
+        # XXX: we should pass the format through
+        link.send(delivery_tag = tag, message_format = 0,
+                  fragments = xfr.fragments)
 
     for t, _, r in link.get_remote():
       if r.settled or r.state is not None:

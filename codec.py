@@ -200,6 +200,9 @@ class TypeEncoder:
   def enc_decimal64(self, d):
     xxx
 
+  def enc_decimal128(self, d):
+    xxx
+
   def enc_char(self, c):
     return self.enc_fixed("char_utf32", "!I", ord(c))
 
@@ -346,6 +349,9 @@ class TypeDecoder:
     xxx
 
   def dec_decimal64_ieee_754(self, bytes):
+    xxx
+
+  def dec_decimal128_ieee_754(self, bytes):
     xxx
 
   def dec_char_utf32(self, bytes):
