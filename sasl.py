@@ -27,7 +27,7 @@ class SASL(Dispatcher):
   type_encoder = PROTOCOL_ENCODER
 
   def __init__(self, connection):
-    Dispatcher.__init__(self, 1)
+    Dispatcher.__init__(self, 3)
     self.connection = connection
     self.mechanisms = None
     self.mechanism = None
