@@ -29,8 +29,9 @@ assert PROTO_HDR_SIZE == 8
 
 class Dispatcher:
 
-  def __init__(self, protocol_id):
+  def __init__(self, protocol_id, frame_type):
     self.protocol_id = protocol_id
+    self.frame_type = frame_type
     self.id = "%X" % id(self)
     self._tracing = set()
     self.tracing(*os.environ.get("AMQP_TRACE", "").split())
@@ -91,7 +92,7 @@ class Dispatcher:
 
   def post_frame(self, channel, body):
     self.trace("frm", "SENT[%s]: %s", channel, body.format(self.multiline))
-    f = Frame(AMQP_FRAME, channel, None, self.type_encoder.encode(body))
+    f = Frame(self.frame_type, channel, None, self.type_encoder.encode(body))
     self.output.write(encode(f))
 
   def read(self, n=None):

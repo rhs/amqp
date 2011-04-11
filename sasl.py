@@ -18,6 +18,7 @@
 #
 
 from dispatcher import Dispatcher
+from framing import SASL_FRAME
 from protocol import *
 
 
@@ -27,7 +28,7 @@ class SASL(Dispatcher):
   type_encoder = PROTOCOL_ENCODER
 
   def __init__(self, connection):
-    Dispatcher.__init__(self, 3)
+    Dispatcher.__init__(self, 3, SASL_FRAME)
     self.connection = connection
     self.mechanisms = None
     self.mechanism = None

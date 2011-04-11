@@ -20,7 +20,8 @@
 import struct
 from util import Buffer, parse
 
-AMQP_FRAME = 0
+AMQP_FRAME = 0x00
+SASL_FRAME = 0x01
 FRAME_HDR_FMT = "!I2BH"
 FRAME_HDR_SIZE = struct.calcsize(FRAME_HDR_FMT)
 assert FRAME_HDR_SIZE == 8

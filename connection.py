@@ -18,6 +18,7 @@
 #
 
 from dispatcher import Dispatcher
+from framing import AMQP_FRAME
 from protocol import *
 from uuid import uuid4
 
@@ -31,7 +32,7 @@ class Connection(Dispatcher):
   type_encoder = PROTOCOL_ENCODER
 
   def __init__(self, factory):
-    Dispatcher.__init__(self, 0)
+    Dispatcher.__init__(self, 0, AMQP_FRAME)
     self.factory = factory
 
     self.open_rcvd = False
