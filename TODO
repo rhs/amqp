@@ -1,5 +1,5 @@
- - Use RFC1982 serial numbers, python bignums won't wraparound
-   properly.
+ - Use RFC1982 serial numbers, python bignums won't wraparound properly.
  - Support multiple distribution modes.
  - Fairness between competing consumers.
  - Message abstraction.
+ - Fix handling of broker detach so that closed=True when appropriate.

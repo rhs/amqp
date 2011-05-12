@@ -47,9 +47,9 @@ class Message:
     return "Message(%s)" % ", ".join(args)
 
 # XXX: encode(message) -> fragments, decode(transfer) -> message
-# XXX: frag + defrag
 
-def encode(message, encoder=Connection.type_encoder):
+def encode(message):
+  encoder = Connection.type_encoder
   # XXX: constants
   head = Fragment(True, True, 0, 0, 0, encoder.encode(message.header))
   prop = Fragment(True, True, 1, 1, 0, encoder.encode(message.properties))
@@ -57,14 +57,37 @@ def encode(message, encoder=Connection.type_encoder):
   foot = Fragment(True, True, 2, 3, 0, encoder.encode(message.footer))
   return (head, prop, body, foot)
 
-def decode(transfer, decoder):
+def process_header(msg, bytes):
+  msg.header = Connection.type_decoder.decode(bytes)[0]
+def process_properties(msg, bytes):
+  msg.properties = Connection.type_decoder.decode(bytes)[0]
+def process_footer(msg, bytes):
+  msg.footer = Connection.type_decoder.decode(bytes)[0]
+def process_data(msg, bytes):
+  msg.content = bytes
+def process_amqp_data(msg, bytes):
+  msg.content = Connection.type_decoder.decode(bytes)[0]
+
+SECTION_PROCESSORS = {
+  0: process_header,
+  1: process_properties,
+  2: process_footer,
+  3: process_data,
+  4: process_amqp_data,
+  5: process_amqp_data,
+  6: process_amqp_data
+  }
+
+def decode(transfer):
   message = Message()
   message.delivery_tag = transfer.delivery_tag
   fragments = transfer.fragments
-  message.header = decoder.decode(fragments[0].payload)[0]
-  message.properties = decoder.decode(fragments[1].payload)[0]
-  message.content = fragments[2].payload
-  # XXX: constants
-  if fragments[-1].section_code == 2:
-    message.footer = decoder.decode(fragments[-1].payload)[0]
+  sections = []
+  for f in fragments:
+    if f.first:
+      sections.append([f.section_code, ""])
+    sections[-1][-1] += f.payload
+  while sections:
+    code, payload = sections.pop(0)
+    SECTION_PROCESSORS[code](message, payload)
   return message

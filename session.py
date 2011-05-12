@@ -34,6 +34,7 @@ class Session:
     self.properties = properties
     self.remote_channel = None
     self.channel = None
+    self.max_frame_size = None
 
     self.begin_sent = False
     self.begin_rcvd = False

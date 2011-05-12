@@ -45,8 +45,10 @@ class Connection(Dispatcher):
     # outgoing channel -> session
     self.outgoing = {}
 
+    self.max_frame_size = 4294967295
+
   def post_frame(self, channel, body):
-    assert not self.close_sent
+    assert not self.close_sent, str(body)
     return Dispatcher.post_frame(self, channel, body)
 
   def opening(self):
@@ -73,6 +75,8 @@ class Connection(Dispatcher):
         self.post_frame(ssn.channel, body)
 
   def open(self, *args, **kwargs):
+    if "max_frame_size" in kwargs:
+      self.max_frame_size = min(self.max_frame_size, kwargs["max_frame_size"])
     self.post_frame(0, Open(*args, **kwargs))
     self.open_sent = True
 
@@ -81,6 +85,8 @@ class Connection(Dispatcher):
       self.close(ConnectionError(error_code=501, description="double open"))
     else:
       self.open_rcvd = True
+    self.max_frame_size = min(self.max_frame_size,
+                              open.max_frame_size or self.max_frame_size)
 
   def close(self, *args, **kwargs):
     # avoid stranding frames inside sessions
@@ -94,6 +100,7 @@ class Connection(Dispatcher):
 
   def add(self, ssn):
     ssn.channel = self.allocate_channel()
+    ssn.max_frame_size = self.max_frame_size
     self.outgoing[ssn.channel] = ssn
 
   def allocate_channel(self):
@@ -105,6 +112,7 @@ class Connection(Dispatcher):
     if ssn.channel in self.outgoing and self.outgoing[ssn.channel] == ssn:
       del self.outgoing[ssn.channel]
       ssn.channel = None
+      ssn.max_frame_size = None
     else:
       raise ConnectionError("no such session")
 

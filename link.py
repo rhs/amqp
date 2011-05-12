@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from protocol import Attach, Flow, Transfer, Disposition, Detach
+from protocol import Attach, Flow, Transfer, Fragment, Disposition, Detach
 from util import Constant, RangeSet
 from uuid import uuid4
 
@@ -234,9 +234,6 @@ class Link(object):
                            settled=local.settled, state=local.state)
         self.session.post_frame(disp)
 
-  def _units(self, xfr):
-    return 1
-
 class Sender(Link):
 
   # XXX
@@ -263,25 +260,66 @@ class Sender(Link):
   def send(self, **kwargs):
     if self.link_credit <= 0:
       raise LinkError("would block")
-    xfr = Transfer(**kwargs)
-    if xfr.delivery_tag is None:
-      xfr.delivery_tag = "%s" % self.delivery_count
-    if not xfr.more:
-      self.delivery_count += 1
+    if kwargs.get("delivery_tag") is None:
+      kwargs["delivery_tag"] = "%s" % self.delivery_count
 
-    u = self._units(xfr)
-    self.transfer_count += u
-    self.link_credit -= u
+    delivery_tag = kwargs.get("delivery_tag")
+    state = kwargs.get("state")
+    settled = kwargs.get("settled")
 
-    self.session.outgoing.append(self, xfr)
-    if xfr.settled:
-      self.session.outgoing.settle(self, xfr.delivery_tag)
+    self.delivery_count += 1
+    self.transfer_count += 1
+    self.link_credit -= 1
+
+    xfrs = self.fragment(**kwargs)
+    for xfr in xfrs:
+      self.session.outgoing.append(self, xfr)
+      self.post_frame(xfr)
+
+    if settled:
+      self.session.outgoing.settle(self, delivery_tag)
     else:
-      self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state))
+      self.unsettled[delivery_tag] = (State(), State(state))
 
-    self.post_frame(xfr)
+    return delivery_tag
 
-    return xfr.delivery_tag
+  def xfr_overhead(self, xfr):
+    return 192 + len(xfr.delivery_tag or "")
+
+  def frag_overhead(self, frag):
+    return 48
+
+  def fragment(self, **kwargs):
+    fragments = list(kwargs.pop("fragments", []))
+    result = []
+    xfr = Transfer(**kwargs)
+    xfr.fragments = []
+    result.append(xfr)
+    remaining = self.session.max_frame_size - self.xfr_overhead(xfr)
+    while fragments:
+      f = fragments.pop(0)
+      remaining -= self.frag_overhead(f)
+      if len(f.payload) > remaining:
+        if remaining > 0:
+          p1 = f.payload[:remaining]
+          p2 = f.payload[remaining:]
+          f1 = Fragment(f.first, False, f.section_code, f.section_number,
+                        f.section_offset, p1)
+          f2 = Fragment(False, f.last, f.section_code, f.section_number,
+                        f.section_offset + remaining, p2)
+          fragments.insert(0, f2)
+          xfr.fragments.append(f1)
+        else:
+          fragments.insert(0, f)
+        xfr.more = True
+        xfr = Transfer(**kwargs)
+        result.append(xfr)
+        xfr.fragments = []
+        remaining = self.session.max_frame_size - self.xfr_overhead(xfr)
+      else:
+        xfr.fragments.append(f)
+        remaining -= len(f.payload)
+    return result
 
 class Receiver(Link):
 
@@ -290,15 +328,29 @@ class Receiver(Link):
 
   def init(self):
     self.incoming = []
+    self.tag = None
+    self.fragments = []
 
   def do_transfer(self, xfr):
     self.session.incoming.append(self, xfr)
-    self.incoming.append(xfr)
-    self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
-    u = self._units(xfr)
-    self.link_credit -= u
-    self.transfer_count += u
-    self.available = max(0, self.available - u)
+    if self.tag is None:
+      self.tag = xfr.delivery_tag
+    elif self.tag != xfr.delivery_tag:
+      raise ValueError("mismatched tags: %s, %s" % (self.tag, xfr.delivery_tag))
+
+    self.fragments.extend(xfr.fragments)
+
+    if not xfr.more:
+      self.tag = None
+      fragments = self.fragments
+      self.tag = None
+      self.fragments = []
+      xfr.fragments = fragments
+      self.incoming.append(xfr)
+      self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+      self.link_credit -= 1
+      self.transfer_count += 1
+      self.available = max(0, self.available - 1)
 
   def do_flow_state(self, state):
     if self.transfer_count is not None:

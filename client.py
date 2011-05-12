@@ -229,7 +229,7 @@ class Sender(Link):
     self.wait(self.capacity)
     if message:
       kwargs["message_format"] = 0
-      kwargs["fragments"] = encode(message, self.connection.proto.type_encoder)
+      kwargs["fragments"] = encode(message)
     return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 
 class Receiver(Link):
@@ -262,4 +262,4 @@ class Receiver(Link):
 
   @synchronized
   def get(self):
-    return decode(self.proto.get(), self.connection.proto.type_decoder)
+    return decode(self.proto.get())
