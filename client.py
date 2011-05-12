@@ -39,9 +39,13 @@ DEFAULT = Constant("DEFAULT")
 
 class Connection:
 
-  def __init__(self):
+  def __init__(self, auth=False):
     self.proto = ProtoConnection(self.session)
-    self.sasl = SASL(self.proto)
+    self.auth = auth
+    if self.auth:
+      self.sasl = SASL(self.proto)
+    else:
+      self.sasl = self.proto
     self._lock = RLock()
     self.condition = Condition(self._lock)
     self.waiter = Waiter(self.condition)
@@ -90,13 +94,17 @@ class Connection:
       kwargs["container_id"] = str(uuid4())
     if "channel_max" not in kwargs:
       kwargs["channel_max"] = 65535
-    self.sasl.client(mechanism=kwargs.pop("mechanism", "ANONYMOUS"),
-                     username=kwargs.pop("username", None),
-                     password=kwargs.pop("password", None))
+    mechanism = kwargs.pop("mechanism", "ANONYMOUS")
+    username = kwargs.pop("username", None)
+    password = kwargs.pop("password", None)
+    if self.auth:
+      self.sasl.client(mechanism=mechanism, username=username,
+                       password=password)
     self.proto.open(**kwargs)
-    self.wait(lambda: self.sasl.outcome is not None)
-    if self.sasl.outcome != 0:
-      raise Exception("authentication failed: %s" % self.sasl.outcome)
+    if self.auth:
+      self.wait(lambda: self.sasl.outcome is not None)
+      if self.sasl.outcome != 0:
+        raise Exception("authentication failed: %s" % self.sasl.outcome)
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:

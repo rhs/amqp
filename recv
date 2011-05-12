@@ -25,6 +25,8 @@ parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
                                description="receive messages")
 parser.add_option("-H", "--host",
                   help="host to connect to (default 0.0.0.0)")
+parser.add_option("-a", "--auth", action="store_true",
+                  help="enable sasl authentication layer")
 parser.add_option("-u", "--username", help="username to use for authentication")
 parser.add_option("-w", "--password", help="password to use for authentication")
 parser.add_option("-m", "--mechanism", default="ANONYMOUS",
@@ -53,7 +55,7 @@ if not args:
 addr = args[0]
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
-conn = Connection()
+conn = Connection(auth=opts.auth)
 conn.tracing(*opts.trace.split())
 conn.connect(host, opts.port)
 conn.open(mechanism=opts.mechanism.upper(), username=opts.username,

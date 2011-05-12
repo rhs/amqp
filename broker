@@ -47,15 +47,17 @@ class Broker:
     for ssn in connection.incoming.values() + connection.outgoing.values():
       ssn.set_incoming_window(self.window, FIXED)
 
-  def tick(self, sasl):
+  def sasl_tick(self, sasl):
     sasl.tick()
     if sasl.outcome != 0:
       return
+    else:
+      self.tick(sasl.connection)
 
-    connection = sasl.connection
+  def tick(self, connection):
     if connection.opening():
       connection.open(container_id = self.container_id,
-                      channel_max = 65535)
+                      channel_max = 65535, max_frame_size=opts.frame_size)
 
     # XXX
     for ssn in connection.incoming.values():
@@ -204,6 +206,10 @@ parser.add_option("-u", "--users", default=[], action="append",
                   help="load user definitions from specified file")
 parser.add_option("-p", "--port", type=int, default=5672,
                   help="port to listen on (default %default)")
+parser.add_option("-a", "--auth", action="store_true",
+                  help="enable sasl authentication layer")
+parser.add_option("-f", "--frame-size", type=int, default=4294967295,
+                  help="specify the maximum frame size")
 parser.add_option("-w", "--window", type=int, default=65536,
                   help="session window size")
 parser.add_option("-e", "--period", type=float, default=None,
@@ -238,9 +244,15 @@ try:
   selector = Selector()
   window = Window(lambda *args: selector.stop())
 
-  def tick(c):
-    broker.tick(c)
-    window.redraw()
+  # XXX
+  if opts.auth:
+    def tick(c):
+      broker.sasl_tick(c)
+      window.redraw()
+  else:
+    def tick(c):
+      broker.tick(c)
+      window.redraw()
 
   def timeout(c):
     broker.timeout(c)
@@ -265,13 +277,17 @@ try:
   sock = bind(opts.interface, opts.port)
 
   def handler(accepted):
-    conn = Connection(lambda properties: Session(link, properties))
-    sasl = SASL(conn)
     traces = opts.trace.split()
+    conn = Connection(lambda properties: Session(link, properties))
     conn.tracing(*traces)
-    sasl.tracing(*traces)
-    sasl.server(mechanisms, passwords=passwords)
-    selector.register(ConnectionSelectable(accepted, sasl, tick,
+    if opts.auth:
+      sasl = SASL(conn)
+      sasl.tracing(*traces)
+      sasl.server(mechanisms, passwords=passwords)
+      sel = sasl
+    else:
+      sel = conn
+    selector.register(ConnectionSelectable(accepted, sel, tick,
                                            period=opts.period, timeout=timeout))
 
   selector.register(Acceptor(sock, handler))
