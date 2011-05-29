@@ -84,7 +84,7 @@ class Session:
       raise SessionError("already begun")
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
-                          next_outgoing_id = self.outgoing.unsettled_hwm + 1,
+                          next_outgoing_id = self.outgoing.transfer_count + 1,
                           incoming_window = self.incoming.window,
                           outgoing_window = 65536, # this should NOT be self.outgoing.window
                           handle_max = 2147483647,
@@ -92,8 +92,8 @@ class Session:
 
   def do_begin(self, begin):
     self.begin_rcvd = True
-    self.incoming.unsettled_hwm = begin.next_outgoing_id - 1
-    self.outgoing.max_id = self.outgoing.unsettled_hwm + begin.incoming_window - 1
+    self.incoming.transfer_count = begin.next_outgoing_id - 1
+    self.outgoing.max_id = self.outgoing.transfer_count + begin.incoming_window - 1
 
   def end(self, error=None):
     if self.end_sent:
@@ -159,7 +159,7 @@ class Session:
 
   def do_flow(self, flow):
     if flow.next_incoming_id is None:
-      start = Outgoing.initial
+      start = Outgoing.initial_transfer
     else:
       start = flow.next_incoming_id
     self.outgoing.window = start + flow.incoming_window - self.outgoing.unsettled_hwm - 1
@@ -191,14 +191,16 @@ class Session:
 class DeliveryMap:
 
   def __init__(self):
-    # (link, delivery_tag) -> ranges
-    self.transfers = {}
-    # (transfer_id - unsettled_lwm) -> (link, delivery_tag)
-    self.deliveries = []
-    # lowest unsettled transfer_id
+    # (link, delivery_tag) -> delivery_id
+    self.delivery_ids = {}
+    # (delivery_id - unsettled_lwm) -> (link, delivery_tag)
+    self.delivery_tags = []
+    # lowest unsettled delivery_id
     self.unsettled_lwm = None
-    # highest unsettled transfer_id
+    # highest unsettled delivery_id
     self.unsettled_hwm = None
+
+    self.transfer_count = None
     self.window = None
     self.policy = SLIDING
     self.init()
@@ -209,37 +211,34 @@ class DeliveryMap:
   def append(self, link, transfer):
     self.window -= 1
     delivery = (link, transfer.delivery_tag)
-    self.mark(transfer)
-    id = transfer.transfer_id
-    if delivery in self.transfers:
-      ranges = self.transfers[delivery]
+    if delivery in self.delivery_ids:
+      # XXX
+      transfer.delivery_id = self.unsettled_hwm
     else:
-      ranges = RangeSet()
-      self.transfers[delivery] = ranges
-    ranges.add(id)
-    self.deliveries.append(delivery)
+      self.mark(transfer)
+      self.delivery_ids[delivery] = transfer.delivery_id
+      self.delivery_tags.append(delivery)
+    self.transfer_count += 1
 
   def settle(self, link, delivery_tag):
     delivery = (link, delivery_tag)
-    ranges = self.transfers.pop(delivery)
-    for r in ranges:
-      for id in r:
-        idx = id - self.unsettled_lwm
-        assert self.deliveries[idx] == delivery
-        self.deliveries[idx] = None
+    id = self.delivery_ids.pop(delivery)
+    idx = id - self.unsettled_lwm
+    assert self.delivery_tags[idx] == delivery
+    self.delivery_tags[idx] = None
 
-    while self.deliveries:
-      if self.deliveries[0] is None:
-        self.deliveries.pop(0)
+    while self.delivery_tags:
+      if self.delivery_tags[0] is None:
+        self.delivery_tags.pop(0)
         self.unsettled_lwm += 1
       else:
         break
 
-  def get_delivery(self, transfer_id):
-    return self.deliveries[transfer_id - self.unsettled_lwm]
+  def get_delivery(self, delivery_id):
+    return self.delivery_tags[delivery_id - self.unsettled_lwm]
 
   def __repr__(self):
-    return "%s(%r, %r, %s, %s)" % (self.__class__, self.transfers, self.deliveries,
+    return "%s(%r, %r, %s, %s)" % (self.__class__, self.delivery_ids, self.delivery_tags,
                                    self.unsettled_lwm, self.unsettled_hwm)
 
 class Incoming(DeliveryMap):
@@ -254,21 +253,23 @@ class Incoming(DeliveryMap):
 
   def mark(self, transfer):
     if self.unsettled_lwm is None:
-      self.unsettled_lwm = transfer.transfer_id
+      self.unsettled_lwm = transfer.delivery_id
     else:
-      assert transfer.transfer_id == self.unsettled_hwm + 1
-    self.unsettled_hwm = transfer.transfer_id
+      assert transfer.delivery_id == self.unsettled_hwm + 1
+    self.unsettled_hwm = transfer.delivery_id
 
 class Outgoing(DeliveryMap):
 
-  initial = 1
+  initial_delivery = 1
+  initial_transfer = 1
 
   def init(self):
-    self.unsettled_lwm = self.initial
-    self.unsettled_hwm = self.initial - 1
+    self.unsettled_lwm = self.initial_delivery
+    self.unsettled_hwm = self.initial_delivery - 1
+    self.transfer_count = self.initial_transfer
     self.window = 0
 
   def mark(self, transfer):
-    assert transfer.transfer_id is None
+    assert transfer.delivery_id is None
     self.unsettled_hwm += 1
-    transfer.transfer_id = self.unsettled_hwm
+    transfer.delivery_id = self.unsettled_hwm

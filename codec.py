@@ -312,11 +312,17 @@ class TypeDecoder:
   def dec_uint(self, bytes):
     return self.unpack("!I", bytes)
 
+  def dec_uint_uint0(self, bytes):
+    return 0, bytes
+
   def dec_uint_smalluint(self, bytes):
     return self.unpack("!B", bytes)
 
   def dec_ulong(self, bytes):
     return self.unpack("!Q", bytes)
+
+  def dec_ulong_ulong0(self, bytes):
+    return 0, bytes
 
   def dec_ulong_smallulong(self, bytes):
     return self.unpack("!B", bytes)
@@ -379,12 +385,6 @@ class TypeDecoder:
 
   def dec_string_str32_utf8(self, bytes):
     return self.dec_variable("!I", bytes, lambda x: x.decode("utf8"))
-
-  def dec_string_str8_utf16(self, bytes):
-    return self.dec_variable("!B", bytes, lambda x: x.decode("utf_16_be"))
-
-  def dec_string_str32_utf16(self, bytes):
-    return self.dec_variable("!I", bytes, lambda x: x.decode("utf_16_be"))
 
   def dec_symbol_sym8(self, bytes):
     return self.dec_variable("!B", bytes, lambda x: Symbol(str(x.decode("ascii"))))

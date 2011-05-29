@@ -58,7 +58,7 @@ class Link(object):
     self.detach_rcvd = False
 
     # flow state
-    self.transfer_count = None
+    self.delivery_count = None
     self.link_credit = 0
     self.available = 0
     self.drain = False
@@ -111,7 +111,7 @@ class Link(object):
                 incoming_window = self.session.incoming.window,
                 next_outgoing_id = self.session.outgoing.unsettled_hwm + 1,
                 outgoing_window = 65536,
-                transfer_count = self.transfer_count,
+                delivery_count = self.delivery_count,
                 link_credit = self.link_credit,
                 available = self.available,
                 drain = self.drain)
@@ -127,14 +127,14 @@ class Link(object):
                            role = self.role,
                            source = self.source,
                            target = self.target,
-                           initial_transfer_count = self.transfer_count))
+                           initial_delivery_count = self.delivery_count))
     if self.role == Receiver.role:
       self.post_frame(self._flow())
 
   def do_attach(self, attach):
     self.attach_rcvd = True
     if self.role == Receiver.role:
-      self.transfer_count = attach.initial_transfer_count
+      self.delivery_count = attach.initial_delivery_count
     self.remote_source = attach.source
     self.remote_target = attach.target
 
@@ -202,10 +202,10 @@ class Link(object):
     if self.handle is None:
       return
 
-    # we don't send flow state until the transfer_count is
+    # we don't send flow state until the delivery_count is
     # initialized, this ensures an unambiguous calculation of the
-    # initial transfer_count
-    if self.echo and self.transfer_count is not None:
+    # initial delivery_count
+    if self.echo and self.delivery_count is not None:
       self.post_frame(self._flow())
 
     role = self.session.roles[self.role]
@@ -214,14 +214,13 @@ class Link(object):
     for dtag, local, remote in self.get_local(modified=True):
       if remote.settled:
         continue
-      ids = role.transfers[(self, dtag)]
+      id = role.delivery_ids[(self, dtag)]
       if local in states:
         ranges = states[local]
       else:
         ranges = RangeSet()
         states[local] = ranges
-      for r in ids:
-        ranges.add_range(r)
+      ranges.add(id)
 
       if local.settled:
         role.settle(self, dtag)
@@ -241,19 +240,19 @@ class Sender(Link):
   initial_count = 0
 
   def init(self):
-    self.transfer_count = self.initial_count
+    self.delivery_count = self.initial_count
 
   def do_flow_state(self, state):
-    if state.transfer_count is None:
+    if state.delivery_count is None:
       receiver_count = self.initial_count
     else:
-      receiver_count = state.transfer_count
-    self.link_credit = receiver_count + state.link_credit - self.transfer_count
+      receiver_count = state.delivery_count
+    self.link_credit = receiver_count + state.link_credit - self.delivery_count
     self.drain = state.drain
 
   def drained(self):
     if self.drain:
-      self.transfer_count += self.link_credit
+      self.delivery_count += self.link_credit
       self.link_credit = 0
       self.post_frame(self._flow())
 
@@ -268,7 +267,7 @@ class Sender(Link):
     settled = kwargs.get("settled")
 
     self.delivery_count += 1
-    self.transfer_count += 1
+    self.delivery_count += 1
     self.link_credit -= 1
 
     xfrs = self.fragment(**kwargs)
@@ -349,13 +348,13 @@ class Receiver(Link):
       self.incoming.append(xfr)
       self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
       self.link_credit -= 1
-      self.transfer_count += 1
+      self.delivery_count += 1
       self.available = max(0, self.available - 1)
 
   def do_flow_state(self, state):
-    if self.transfer_count is not None:
-      self.link_credit -= state.transfer_count - self.transfer_count
-    self.transfer_count = state.transfer_count
+    if self.delivery_count is not None:
+      self.link_credit -= state.delivery_count - self.delivery_count
+    self.delivery_count = state.delivery_count
     self.available = state.available
 
   def flow(self, n, drain=False):

@@ -66,5 +66,5 @@ for cls in CLASSES:
   globals()[cls.__name__] = cls
   __all__.append(cls.__name__)
 
-ACCEPTED = TransferState(outcome=Accepted())
-REJECTED = TransferState(outcome=Rejected())
+ACCEPTED = DeliveryState(outcome=Accepted())
+REJECTED = DeliveryState(outcome=Rejected())

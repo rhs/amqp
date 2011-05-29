@@ -3,11 +3,11 @@
 <!--
 
 Copyright Bank of America, N.A., Barclays Bank PLC, Cisco Systems, Credit
-Suisse, Deutsche Boerse Systems, Envoy Technologies Inc., Goldman Sachs, INETCO
-Systems Limited, JPMorgan Chase Bank Inc. N.A, Microsoft Corporation, Novell,
-Progress Software, Rabbit Technologies Ltd., Red Hat Inc., Solace Systems Inc.,
-Tervela Inc., TWIST Process Innovations Ltd, WS02 Inc. and 29West Inc 2006-2010.
-All rights reserved.
+Suisse, Deutsche Boerse Systems, Goldman Sachs, HCL Technologies Ltd, INETCO
+Systems Limited, Informatica Corporation, JPMorgan Chase Bank Inc. N.A,
+Microsoft Corporation, my-Channels, Novell, Progress Software, Red Hat Inc.,
+Software AG, Solace Systems Inc., StormMQ Ltd., Tervela Inc., TWIST Process
+Innovations Ltd, VMware Inc. and WS02 Inc. 2006-2011. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -64,14 +64,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <descriptor name="amqp:attach:list" code="0x00000000:0x00000012"/>
       <field name="options" type="options"/>
       <field name="name" type="string" mandatory="true"/>
-      <field name="handle" type="handle" mandatory="true">
-        <error name="handle-busy" type="amqp-error" value="invalid-field"/>
-      </field>
+      <field name="handle" type="handle" mandatory="true"/>
       <field name="role" type="role" mandatory="true"/>
       <field name="source" type="*" requires="source"/>
       <field name="target" type="*" requires="target"/>
       <field name="unsettled" type="map"/>
-      <field name="initial-transfer-count" type="sequence-no"/>
+      <field name="initial-delivery-count" type="sequence-no"/>
       <field name="max-message-size" type="ulong"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
@@ -84,10 +82,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="incoming-window" type="uint" mandatory="true"/>
       <field name="next-outgoing-id" type="transfer-number" mandatory="true"/>
       <field name="outgoing-window" type="uint" mandatory="true"/>
-      <field name="handle" type="handle">
-        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
-      </field>
-      <field name="transfer-count" type="sequence-no"/>
+      <field name="handle" type="handle"/>
+      <field name="delivery-count" type="sequence-no"/>
       <field name="link-credit" type="uint"/>
       <field name="available" type="uint"/>
       <field name="drain" type="boolean" default="false"/>
@@ -96,13 +92,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="transfer" class="composite" source="list" provides="frame">
       <descriptor name="amqp:transfer:list" code="0x00000000:0x00000014"/>
       <field name="options" type="options"/>
-      <field name="handle" type="handle" mandatory="true">
-        <error name="unattached-handle" type="amqp-error" value="invalid-field"/>
-      </field>
+      <field name="handle" type="handle" mandatory="true"/>
       <field name="delivery-tag" type="delivery-tag" mandatory="true"/>
-      <field name="transfer-id" type="transfer-number" mandatory="true"/>
+      <field name="delivery-id" type="delivery-number" mandatory="true"/>
       <field name="settled" type="boolean" default="false"/>
-      <field name="state" type="*" requires="transfer-state"/>
+      <field name="state" type="*" requires="delivery-state"/>
       <field name="resume" type="boolean" default="false"/>
       <field name="more" type="boolean" default="false"/>
       <field name="aborted" type="boolean" default="false"/>
@@ -115,10 +109,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="options" type="options"/>
       <field name="role" type="role" mandatory="true"/>
       <field name="batchable" type="boolean" default="false"/>
-      <field name="first" type="transfer-number" mandatory="true"/>
-      <field name="last" type="transfer-number"/>
+      <field name="first" type="delivery-number" mandatory="true"/>
+      <field name="last" type="delivery-number"/>
       <field name="settled" type="boolean" default="false"/>
-      <field name="state" type="*" requires="transfer-state"/>
+      <field name="state" type="*" requires="delivery-state"/>
     </type>
     <type name="detach" class="composite" source="list" provides="frame">
       <descriptor name="amqp:detach:list" code="0x00000000:0x00000016"/>
@@ -147,6 +141,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="seconds" class="restricted" source="uint"/>
     <type name="milliseconds" class="restricted" source="uint"/>
     <type name="delivery-tag" class="restricted" source="binary"/>
+    <type name="delivery-number" class="restricted" source="sequence-no"/>
     <type name="transfer-number" class="restricted" source="sequence-no"/>
     <type name="sequence-no" class="restricted" source="uint"/>
     <type name="message-format" class="restricted" source="uint"/>
@@ -160,16 +155,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="payload" type="binary"/>
     </type>
     <type name="fields" class="restricted" source="map"/>
-    <type name="options" class="restricted" source="fields">
-      <error name="unknown-option" type="amqp-error" value="not-implemented"/>
-    </type>
+    <type name="options" class="restricted" source="fields"/>
     <type name="error" class="composite" source="list">
       <descriptor name="amqp:error:list" code="0x00000000:0x0000001d"/>
-      <field name="condition" type="symbol" mandatory="true" requires="error"/>
+      <field name="condition" type="symbol" mandatory="true" requires="error-condition"/>
       <field name="description" type="string"/>
       <field name="info" type="map"/>
     </type>
-    <type name="amqp-error" class="restricted" source="symbol" provides="error">
+    <type name="amqp-error" class="restricted" source="symbol" provides="error-condition">
       <choice name="internal-error" value="amqp:internal-error"/>
       <choice name="not-found" value="amqp:not-found"/>
       <choice name="unauthorized-access" value="amqp:unauthorized-access"/>
@@ -182,19 +175,24 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <choice name="precondition-failed" value="amqp:precondition-failed"/>
       <choice name="resource-deleted" value="amqp:resource-deleted"/>
       <choice name="illegal-state" value="amqp:illegal-state"/>
+      <choice name="frame-size-too-small" value="amqp:frame-size-too-small"/>
     </type>
-    <type name="connection-error" class="restricted" source="symbol" provides="error">
+    <type name="connection-error" class="restricted" source="symbol" provides="error-condition">
       <choice name="connection-forced" value="amqp:connection:forced"/>
       <choice name="framing-error" value="amqp:connection:framing-error"/>
+      <choice name="redirect" value="amqp:connection:redirect"/>
     </type>
-    <type name="session-error" class="restricted" source="symbol" provides="error">
+    <type name="session-error" class="restricted" source="symbol" provides="error-condition">
       <choice name="window-violation" value="amqp:session:window-violation"/>
       <choice name="errant-link" value="amqp:session:errant-link"/>
+      <choice name="handle-in-use" value="amqp:session:handle-in-use"/>
+      <choice name="unattached-handle" value="amqp:session:unattached-handle"/>
     </type>
-    <type name="link-error" class="restricted" source="symbol" provides="error">
+    <type name="link-error" class="restricted" source="symbol" provides="error-condition">
       <choice name="detach-forced" value="amqp:link:detach-forced"/>
       <choice name="transfer-limit-exceeded" value="amqp:link:transfer-limit-exceeded"/>
       <choice name="message-size-exceeded" value="amqp:link:message-size-exceeded"/>
+      <choice name="redirect" value="amqp:link:redirect"/>
     </type>
     <definition name="PORT" value="5672"/>
     <definition name="SECURE-PORT" value="5671"/>
