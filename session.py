@@ -192,9 +192,9 @@ class DeliveryMap:
 
   def __init__(self):
     # (link, delivery_tag) -> delivery_id
-    self.delivery_ids = {}
+    self.aliases = {}
     # (delivery_id - unsettled_lwm) -> (link, delivery_tag)
-    self.delivery_tags = []
+    self.deliveries = []
     # lowest unsettled delivery_id
     self.unsettled_lwm = None
     # highest unsettled delivery_id
@@ -211,34 +211,34 @@ class DeliveryMap:
   def append(self, link, transfer):
     self.window -= 1
     delivery = (link, transfer.delivery_tag)
-    if delivery in self.delivery_ids:
+    if delivery in self.aliases:
       # XXX
       transfer.delivery_id = self.unsettled_hwm
     else:
       self.mark(transfer)
-      self.delivery_ids[delivery] = transfer.delivery_id
-      self.delivery_tags.append(delivery)
+      self.aliases[delivery] = transfer.delivery_id
+      self.deliveries.append(delivery)
     self.transfer_count += 1
 
   def settle(self, link, delivery_tag):
     delivery = (link, delivery_tag)
-    id = self.delivery_ids.pop(delivery)
+    id = self.aliases.pop(delivery)
     idx = id - self.unsettled_lwm
-    assert self.delivery_tags[idx] == delivery
-    self.delivery_tags[idx] = None
+    assert self.deliveries[idx] == delivery
+    self.deliveries[idx] = None
 
-    while self.delivery_tags:
-      if self.delivery_tags[0] is None:
-        self.delivery_tags.pop(0)
+    while self.deliveries:
+      if self.deliveries[0] is None:
+        self.deliveries.pop(0)
         self.unsettled_lwm += 1
       else:
         break
 
   def get_delivery(self, delivery_id):
-    return self.delivery_tags[delivery_id - self.unsettled_lwm]
+    return self.deliveries[delivery_id - self.unsettled_lwm]
 
   def __repr__(self):
-    return "%s(%r, %r, %s, %s)" % (self.__class__, self.delivery_ids, self.delivery_tags,
+    return "%s(%r, %r, %s, %s)" % (self.__class__, self.aliases, self.deliveries,
                                    self.unsettled_lwm, self.unsettled_hwm)
 
 class Incoming(DeliveryMap):

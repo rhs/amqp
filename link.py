@@ -214,7 +214,7 @@ class Link(object):
     for dtag, local, remote in self.get_local(modified=True):
       if remote.settled:
         continue
-      id = role.delivery_ids[(self, dtag)]
+      id = role.aliases[(self, dtag)]
       if local in states:
         ranges = states[local]
       else:
