@@ -39,10 +39,12 @@ class FieldCompare(Composite):
 TRANSPORT = load_xml("transport.xml")
 MESSAGING = load_xml("messaging.xml")
 SECURITY = load_xml("security.xml")
+TRANSACTIONS = load_xml("transactions.xml")
 
 TYPES = reduce(lambda x, y: x + y,
                [d.query["amqp/section/type"]
-                for d in [TYPES_DOC, TRANSPORT, MESSAGING, SECURITY]])
+                for d in [TYPES_DOC, TRANSPORT, MESSAGING, SECURITY,
+                          TRANSACTIONS]])
 CLASSES = load_composite(TYPES, Composite, frame=Body, outcome=FieldCompare,
                          TransferState=FieldCompare)
 
