@@ -64,9 +64,6 @@ class Link(object):
     self.drain = False
     self.echo = False
 
-    # used to provide default delivery-tag
-    self.delivery_count = 0
-
     # delivery-tag -> (local_state, remote_state)
     self.unsettled = {}
 
@@ -260,13 +257,12 @@ class Sender(Link):
     if self.link_credit <= 0:
       raise LinkError("would block")
     if kwargs.get("delivery_tag") is None:
-      kwargs["delivery_tag"] = "%s" % self.delivery_count
+      kwargs["delivery_tag"] = "%s" % self.delivery_count or 0
 
     delivery_tag = kwargs.get("delivery_tag")
     state = kwargs.get("state")
     settled = kwargs.get("settled")
 
-    self.delivery_count += 1
     self.delivery_count += 1
     self.link_credit -= 1
 
