@@ -70,3 +70,4 @@ for cls in CLASSES:
 
 ACCEPTED = DeliveryState(outcome=Accepted())
 REJECTED = DeliveryState(outcome=Rejected())
+RELEASED = DeliveryState(outcome=Released())

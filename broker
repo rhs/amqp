@@ -25,7 +25,84 @@ from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
 from queue import Queue
 from util import ConnectionSelectable
-from protocol import Target, Coordinator
+from protocol import Target, Coordinator, Declare, Discharge, DeliveryState
+from messaging import decode
+
+class Transaction:
+
+  def __init__(self, txn_id):
+    self.txn_id = txn_id
+    self.work = []
+
+  def add_work(self, doit, undo):
+    self.work.append((doit, undo))
+
+  def discharge(self, fail):
+    for doit, undo in self.work:
+      if fail:
+        undo()
+      else:
+        doit()
+
+class TxnCoordinator:
+
+  def __init__(self):
+    self.transactions = {}
+    self.next_id = 0
+
+  def declare(self):
+    id = self.next_id
+    self.next_id += 1
+    return id
+
+  def discharge(self, txn_id, fail):
+    if txn_id in self.transactions:
+      txn = self.transactions.pop(txn_id)
+      txn.discharge(fail)
+
+  def get_transaction(self, state):
+    txn_id = state.txn_id
+    if txn_id is not None:
+      if txn_id in self.transactions:
+        return self.transactions[txn_id]
+      else:
+        txn = Transaction(txn_id)
+        self.transactions[txn_id] = txn
+        return txn
+
+  def target(self):
+    return TxnTarget(self)
+
+class TxnTarget:
+
+  def __init__(self, coordinator):
+    self.coordinator = coordinator
+    self.dispatch = {Declare: self.declare, Discharge: self.discharge}
+    self.unsettled = {}
+
+  def capacity(self):
+    return True
+
+  def put(self, dtag, xfr):
+    msg = decode(xfr)
+    self.unsettled[dtag] = msg
+    self.dispatch[msg.content.__class__](xfr.state, msg)
+
+  def declare(self, state, msg):
+    self.unsettled[msg.delivery_tag] = self.coordinator.declare()
+
+  def discharge(self, state, msg):
+    self.coordinator.discharge(state.txn_id, msg.content.fail)
+    self.unsettled[msg.delivery_tag] = state.txn_id
+
+  def settle(self, dtag):
+    return DeliveryState(txn_id=self.unsettled.pop(dtag))
+
+  def orphaned(self):
+    return True
+
+  def close(self):
+    pass
 
 class Broker:
 
@@ -33,6 +110,7 @@ class Broker:
     self.container_id = container_id
     self.window = window
     self.period = period
+    self.coordinator = TxnCoordinator()
     self.nodes = {}
     self.sources = {}
     self.targets = {}
@@ -41,6 +119,8 @@ class Broker:
                    Receiver.role: self.attach_receiver}
     self.process = {Sender.role: self.process_sender,
                     Receiver.role: self.process_receiver}
+    self.orphan = {Sender.role: self.orphan_sender,
+                   Receiver.role: self.orphan_receiver}
     self.detach = {Sender.role: self.detach_sender,
                    Receiver.role: self.detach_receiver}
     self.resolvers = {Target: self.resolve_target,
@@ -94,6 +174,8 @@ class Broker:
         if link.detaching():
           self.detach[link.role](link)
           link.detach()
+        elif ssn.ending():
+          self.orphan[link.role](link)
 
         if link.detached():
           ssn.remove(link)
@@ -155,7 +237,7 @@ class Broker:
     return self.nodes.get(target.address)
 
   def resolve_coordinator(self, target):
-    return None
+    return self.coordinator
 
   def process_sender(self, link):
     if link.source is None: return
@@ -170,20 +252,54 @@ class Broker:
         link.send(delivery_tag = tag, message_format = 0,
                   fragments = xfr.fragments)
 
-    for t, _, r in link.get_remote():
+    for t, _, r in link.get_remote(modified=True):
       if r.settled or r.state is not None:
-        state = source.settle(t, r.state)
-        link.settle(t, state)
+        def doit(t=t, s=r.state):
+          state = source.settle(t, r.state)
+          link.settle(t, state)
+        def undo(t=t):
+          state = source.settle(t, None)
+          link.settle(t, state)
+        if r.state:
+          txn = self.coordinator.get_transaction(r.state)
+        else:
+          txn = None
+        if txn:
+          txn.add_work(doit, undo)
+        else:
+          doit()
+      r.modified = False
 
   def process_receiver(self, link):
     if link.target is None: return
     target = self.targets[link.name]
     while link.pending():
       xfr = link.get()
-      target.put(xfr.delivery_tag, xfr)
+      if not isinstance(target, TxnTarget):
+        if xfr.state:
+          txn = self.coordinator.get_transaction(xfr.state)
+        else:
+          txn = None
+      else:
+        txn = None
+      entry = target.put(xfr.delivery_tag, xfr)
+      if txn:
+        entry.acquire(txn)
+        # XXX: consider using settlement rather than entry
+        txn.add_work(lambda: entry.release(), lambda: entry.remove())
       state = target.settle(xfr.delivery_tag)
       link.settle(xfr.delivery_tag, state)
     if target.capacity() and link.credit() < 10: link.flow(10)
+
+  def orphan_sender(self, link):
+    source = self.sources[link.name]
+    if source.orphaned():
+      del self.sources[link.name]
+
+  def orphan_receiver(self, link):
+    target = self.targets[link.name]
+    if target.orphaned():
+      del self.targets[link.name]
 
   def detach_sender(self, link):
     if link.source and link.remote_source is None:

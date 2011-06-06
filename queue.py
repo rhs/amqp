@@ -86,6 +86,7 @@ class Queue:
     entry.item = item
     if self.ring is not None and self.size > self.ring:
       self.head = self.head.next
+    return entry
 
   def compact(self):
     while self.head.item is None:
@@ -105,7 +106,12 @@ class Queue:
       e = e.next
     return repr(entries)
 
-class Source:
+class Terminus:
+
+  def orphaned(self):
+    return False
+
+class Source(Terminus):
 
   def __init__(self, next, acquire, dequeue):
     self.next = next
@@ -145,17 +151,21 @@ class Source:
 
   def settle(self, tag, state):
     entry = self.unacked.pop(tag)
-    if self.dequeue:
+
+    if state is None:
+      entry.release()
+    elif self.dequeue:
       entry.remove()
 #      print "DEQUEUED:", tag, outcome
-      return state
+
+    return state
 
   def close(self):
     for tag in self.unacked.keys():
       # XXX: default outcome
       self.settle(tag, None)
 
-class Target:
+class Target(Terminus):
 
   def __init__(self, queue):
     self.queue = queue
@@ -164,7 +174,7 @@ class Target:
     return self.queue.capacity()
 
   def put(self, tag, message):
-    self.queue.put(message)
+    return self.queue.put(message)
 #    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
