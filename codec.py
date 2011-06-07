@@ -224,7 +224,10 @@ class TypeEncoder:
     return self.enc_binary(bytes)
 
   def enc_symbol(self, s):
-    bytes = s.name.encode("ascii")
+    if isinstance(s, basestring):
+      bytes = s.encode("ascii")
+    else:
+      bytes = s.name.encode("ascii")
     return self.enc_binary(bytes)
 
   def enc_list(self, l):
@@ -242,7 +245,7 @@ class TypeEncoder:
     encoded = "".join([encoder(self.deconstruct(v)[-1]) for v in a.values])
 
     if descriptor is UNDESCRIBED:
-      return self.enc_binary("%s%s%s", count, code, encoded)
+      return self.enc_binary("%s%s%s" % (count, code, encoded))
     else:
       return self.enc_binary("%s\x00%s%s%s" % (count, self.encode(descriptor), code, encoded))
 

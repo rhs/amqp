@@ -51,13 +51,14 @@ class SASL(Dispatcher):
     self.post_frame(0, SaslMechanisms(sasl_server_mechanisms = self.mechanisms))
 
   def do_sasl_mechanisms(self, channel, mechs):
-    if self.mechanism not in mechs.sasl_server_mechanisms:
+    if self.mechanism not in [m.name for m in mechs.sasl_server_mechanisms]:
       # we're pretending negotiation failure is an outcome
       self.outcome = 2
 
   def do_sasl_init(self, channel, init):
-    if init.mechanism in self.mechanisms:
-      return getattr(self, "mech_%s" % init.mechanism.lower())(init.initial_response)
+    mech = init.mechanism.name
+    if mech in self.mechanisms:
+      return getattr(self, "mech_%s" % mech.lower())(init.initial_response)
     else:
       return self.post_outcome(2)
 
