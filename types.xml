@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <encoding code="0x40" category="fixed" width="0"/>
     </type>
     <type name="boolean" class="primitive">
+      <encoding code="0x56" category="fixed" width="1"/>
       <encoding name="true" code="0x41" category="fixed" width="0"/>
       <encoding name="false" code="0x42" category="fixed" width="0"/>
     </type>
@@ -110,12 +111,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="list" class="primitive">
       <encoding name="list8" code="0xc0" category="compound" width="1"/>
       <encoding name="list32" code="0xd0" category="compound" width="4"/>
-      <encoding name="array8" code="0xe0" category="array" width="1"/>
-      <encoding name="array32" code="0xf0" category="array" width="4"/>
     </type>
     <type name="map" class="primitive">
       <encoding name="map8" code="0xc1" category="compound" width="1"/>
       <encoding name="map32" code="0xd1" category="compound" width="4"/>
+    </type>
+    <type name="array" class="primitive">
+      <encoding name="array8" code="0xe0" category="array" width="1"/>
+      <encoding name="array32" code="0xf0" category="array" width="4"/>
     </type>
   </section>
 </amqp>

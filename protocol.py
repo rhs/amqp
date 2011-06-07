@@ -53,6 +53,7 @@ PROTOCOL_ENCODER = TypeEncoder()
 
 for cls in CLASSES:
   PROTOCOL_ENCODER.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
+                                                    v.SOURCE,
                                                     v.deconstruct())
   for d in cls.DESCRIPTORS:
     if cls.SOURCE == "map":

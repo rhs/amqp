@@ -18,7 +18,7 @@
 #
 
 import datetime, struct, time, uuid, cStringIO
-from util import pythonize, load_xml, identity
+from util import pythonize, load_xml, identity, Constant
 
 class Encoding:
 
@@ -57,23 +57,33 @@ WIDTH_CODES = {
   4: "I"
   }
 
-class Box:
+UNDESCRIBED = Constant("UNDESCRIBED")
 
-  def __init__(self, type, value):
+class Array:
+
+  def __init__(self, type, values, descriptor=UNDESCRIBED):
+    self.type = type
+    self.values = values
+    self.descriptor = descriptor
+
+  def __repr__(self):
+    if self.descriptor is UNDESCRIBED:
+      return "Array(%r, %r)" % (self.type, self.values)
+    else:
+      return "Array(%r, %r, %r)" % (self.type, self.values, self.descriptor)
+
+class Value:
+
+  def __init__(self, type, value, descriptor=UNDESCRIBED):
     self.type = type
     self.value = value
-
-  def __repr__(self):
-    return "Box(%r, %r)" % (self.type, self.value)
-
-class Described:
-
-  def __init__(self, descriptor, value):
     self.descriptor = descriptor
-    self.value = value
 
   def __repr__(self):
-    return "Described(%r, %r)" % (self.descriptor, self.value)
+    if self.descriptor is UNDESCRIBED:
+      return "Value(%r, %r)" % (self.type, self.value)
+    else:
+      return "Value(%r, %r, %r)" % (self.type, self.value, self.descriptor)
 
 class Symbol:
 
@@ -89,110 +99,102 @@ class Symbol:
   def __repr__(self):
     return "Symbol(%r)" % self.name
 
-# XXX: sym instead of Symbol?, box instead of Box?, kill Described in favor of overloading box?
-
-UNDESCRIBED = object()
+# XXX: sym instead of Symbol?
 
 class TypeEncoder:
 
   def __init__(self, encodings=ENCODINGS):
     self.encodings = {}
+    self.encoders = {}
     for enc in encodings:
-      self.encodings[enc.name] = enc
-      if not (hasattr(self, "enc_%s" % enc.type)):
-        raise ValueError("no encoder for encoding: %s" % enc)
-    self.encoders = {
-      Box: self.enc_box,
-      bool: self.enc_boolean,
-      int: self.enc_long, # the boundary between int and long is
-                          # platform specific, so we treat them the
-                          # same to avoid platform dependencies
-      long: self.enc_long,
-      float: self.enc_double, # python floats are actually doubles
-      datetime.datetime: self.enc_timestamp,
-      dict: self.enc_map,
-      list: self.enc_list,
-      tuple: self.enc_list,
-      unicode: self.enc_string,
+      if enc.type in self.encodings:
+        orig = self.encodings[enc.type]
+        if orig.width < enc.width:
+          self.encodings[enc.type] = enc
+      else:
+        self.encodings[enc.type] = enc
+      self.encoders[enc.type] = getattr(self, "enc_%s" % enc.type)
+    self.types = {
+      bool: "boolean",
+      int: "long",  # the boundary between int and long is
+      long: "long", # platform specific, so we treat them the
+                    # same to avoid platform dependencies
+      float: "double", # python floats are actually doubles
+      datetime.datetime: "timestamp",
+      dict: "map",
+      list: "list",
+      tuple: "list",
+      Array: "array",
+      unicode: "string",
       # XXX: the mapping choice here is a bit tricky given python's
       # blurring beween string and binary data
-      str: self.enc_string,
-      Symbol: self.enc_symbol,
-      buffer: self.enc_binary,
-      uuid.UUID: self.enc_uuid,
-      None.__class__: self.enc_null
+      str: "string",
+      Symbol: "symbol",
+      buffer: "binary",
+      uuid.UUID: "uuid",
+      None.__class__: "null"
       }
     self.deconstructors = {
-      Described: lambda v: (v.descriptor, v.value)
+      Value: self.deconstruct_value,
       }
 
+  def deconstruct_value(self, v):
+    return v.descriptor, v.type, v.value
+
+  def default_deconstructor(self, v):
+    return UNDESCRIBED, self.types[v.__class__], v
+
   def deconstruct(self, value):
-    deconstructor = self.deconstructors.get(value.__class__, lambda v: (UNDESCRIBED, v))
-    descriptor, value = deconstructor(value)
-    encoder = self.encoders[value.__class__]
-    return descriptor, encoder, value
+    deconstructor = self.deconstructors.get(value.__class__, self.default_deconstructor)
+    return deconstructor(value)
 
   def encode(self, value):
-    descriptor, encoder, value = self.deconstruct(value)
+    descriptor, type, value = self.deconstruct(value)
+    code = struct.pack("!B", self.encodings[type].code)
+    encoded = self.encoders[type](value)
     if descriptor is UNDESCRIBED:
-      return encoder(value)
+      return "%s%s" % (code, encoded)
     else:
-      return "\x00%s%s" % (self.encode(descriptor), self.encode(value))
-
-  def enc_fixed(self, enc_name, format=None, *args):
-    enc = self.encodings[enc_name]
-    if format:
-      bytes = struct.pack(format, *args)
-    else:
-      bytes = ""
-    assert len(bytes) == enc.width
-    return struct.pack("!B", enc.code) + bytes
-
-  def enc_box(self, b):
-    encoder = getattr(self, "enc_%s" % b.type, None)
-    if encoder:
-      return encoder(b.value)
-    else:
-      raise ValueError("unknown type: %s" % b.type)
+      return "\x00%s%s%s" % (self.encode(descriptor), code, encoded)
 
   def enc_null(self, n):
-    return self.enc_fixed("null")
+    return ""
 
   def enc_boolean(self, b):
     if b:
-      return self.enc_fixed("boolean_true")
+      return "\x01"
     else:
-      return self.enc_fixed("boolean_false")
+      return "\x00"
 
   def enc_ubyte(self, b):
-    return self.enc_fixed("ubyte", "!B", b)
+    return struct.pack("!B", b)
 
   def enc_ushort(self, s):
-    return self.enc_fixed("ushort", "!H", s)
+    return struct.pack("!H", s)
 
   def enc_uint(self, i):
-    return self.enc_fixed("uint", "!I", i)
+    return struct.pack("!I", i)
 
   def enc_ulong(self, l):
-    return self.enc_fixed("ulong", "!Q", l)
+    return struct.pack("!Q", l)
 
   def enc_byte(self, b):
-    return self.enc_fixed("byte", "!b", b)
+    return struct.pack("!b", b)
 
   def enc_short(self, s):
-    return self.enc_fixed("short", "!h", s)
+    return struct.pack("!h", s)
 
   def enc_int(self, i):
-    return self.enc_fixed("int", "!i", i)
+    return struct.pack("!i", i)
 
   def enc_long(self, l):
-    return self.enc_fixed("long", "!q", l)
+    return struct.pack("!q", l)
 
   def enc_float(self, f):
-    return self.enc_fixed("float_ieee_754", "!f", f)
+    return struct.pack("!f", f)
 
   def enc_double(self, d):
-    return self.enc_fixed("double_ieee_754", "!d", d)
+    return struct.pack("!d", d)
 
   def enc_decimal32(self, d):
     xxx
@@ -204,98 +206,90 @@ class TypeEncoder:
     xxx
 
   def enc_char(self, c):
-    return self.enc_fixed("char_utf32", "!I", ord(c))
+    return struct.pack("!I", ord(c))
 
   def enc_timestamp(self, t):
-    return self.enc_fixed("timestamp_ms64", "!q",
-                          1000*int(time.mktime(t.timetuple())))
+    return struct.pack("!q", 1000*int(time.mktime(t.timetuple())))
 
   def enc_uuid(self, u):
-    return self.enc_fixed("uuid", "!16s", u.bytes)
-
-  def enc_variable(self, base_enc, bytes):
-    if len(bytes) < 256:
-      format = "!B"
-      enc = "%s8" % base_enc
-    else:
-      format = "!I"
-      enc = "%s32" % base_enc
-    return self.enc_fixed(enc, format, len(bytes)) + bytes
+    return struct.pack("!16s", u.bytes)
 
   def enc_binary(self, b):
     if isinstance(b, buffer):
       b = str(b)
-    return self.enc_variable("binary_vbin", b)
+    return struct.pack("!I", len(b)) + b
 
   def enc_string(self, s):
     bytes = s.encode("utf8")
-    # XXX: this is a bug!!!!????
-    return self.enc_variable("string_str8_utf", bytes)
+    return self.enc_binary(bytes)
 
   def enc_symbol(self, s):
     bytes = s.name.encode("ascii")
-    return self.enc_variable("symbol_sym", bytes)
-
-  def enc_compound(self, base_enc, elements):
-    encoded = "".join([self.encode(x) for x in elements])
-    count = len(elements)
-    # XXX: this is sort of a PITA to get right
-    if count < 256 and len(encoded) < 255:
-      encoded = struct.pack("!B", count) + encoded
-    else:
-      encoded = struct.pack("!I", count) + encoded
-    return self.enc_variable(base_enc, encoded)
+    return self.enc_binary(bytes)
 
   def enc_list(self, l):
-    return self.enc_compound("list_list", l)
+    encoded = "".join([self.encode(x) for x in l])
+    return self.enc_binary("%s%s" % (struct.pack("!I", len(l)), encoded))
+
+  def enc_array(self, a):
+    descriptor = a.descriptor
+    type = a.type
+    encoding = self.encodings[type]
+    encoder = self.encoders[type]
+    code = struct.pack("!B", encoding.code)
+    count = struct.pack("!I", len(a.values))
+    # XXX: should check that deconstructed value matches array type & descriptor
+    encoded = "".join([encoder(self.deconstruct(v)[-1]) for v in a.values])
+
+    if descriptor is UNDESCRIBED:
+      return self.enc_binary("%s%s%s", count, code, encoded)
+    else:
+      return self.enc_binary("%s\x00%s%s%s" % (count, self.encode(descriptor), code, encoded))
 
   def enc_map(self, m):
-    elements = []
+    pairs = []
     for pair in m.items():
-      elements.extend(pair)
-    return self.enc_compound("map_map", elements)
+      pairs.extend(pair)
+    return self.enc_list(pairs)
 
 class TypeDecoder:
 
   def __init__(self, encodings=ENCODINGS):
-    self.decoders = {}
+    self.encodings = {}
     for enc in encodings:
-      self.decoders[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
+      self.encodings[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
     self.constructors = {
       UNDESCRIBED: lambda d, v: v
       }
 
   def construct(self, descriptor, value):
-    constructor = self.constructors.get(descriptor, Described)
+    constructor = self.constructors.get(descriptor, Value)
     return constructor(descriptor, value)
 
-  def decode(self, bytes, count=1):
-    descriptor, (encoding, decoder), bytes = self.dec_type(bytes)
-    if count > 1:
-      value = []
-      while count > 0:
-        v, bytes = decoder(bytes)
-        value.append(v)
-        count -= 1
-    else:
-      value, bytes = decoder(bytes)
+  def decode(self, bytes):
+    descriptor, (encoding, decoder), bytes = self.decode_type(bytes)
+    value, bytes = decoder(bytes)
     return self.construct(descriptor, value), bytes
 
-  def unpack(self, format, bytes, constructor=identity):
-    n = struct.calcsize(format)
-    return constructor(*struct.unpack(format, bytes[:n])), bytes[n:]
-
-  def dec_type(self, bytes):
+  def decode_type(self, bytes):
     code, bytes = self.unpack("!B", bytes)
     if code == 0:
       descriptor, bytes = self.decode(bytes)
       code, bytes = self.unpack("!B", bytes)
     else:
       descriptor = UNDESCRIBED
-    return descriptor, self.decoders[code], bytes
+    return descriptor, self.encodings[code], bytes
+
+  def unpack(self, format, bytes, constructor=identity):
+    n = struct.calcsize(format)
+    return constructor(*struct.unpack(format, bytes[:n])), bytes[n:]
 
   def dec_null(self, bytes):
     return None, bytes
+
+  def dec_boolean(self, bytes):
+    v, bytes = self.unpack("!B", bytes)
+    return v != 0, bytes
 
   def dec_boolean_true(self, bytes):
     return True, bytes
@@ -409,13 +403,20 @@ class TypeDecoder:
 
   def dec_array(self, format, bytes, constructor=identity):
     (size, count), bytes = self.unpack(format, bytes, lambda s, c: (s, c))
-    result, bytes = self.decode(bytes, count)
-    return constructor(result), bytes
+    descriptor, (encoding, decoder), bytes = self.decode_type(bytes)
 
-  def dec_list_array8(self, bytes):
+    values = []
+    while count > 0:
+      element, bytes = decoder(bytes)
+      values.append(self.construct(descriptor, element))
+      count -= 1
+
+    return Array(encoding.type, values), bytes
+
+  def dec_array_array8(self, bytes):
     return self.dec_array("!BB", bytes)
 
-  def dec_list_array32(self, bytes):
+  def dec_array_array32(self, bytes):
     return self.dec_array("!II", bytes)
 
   def dec_map(self, elements):

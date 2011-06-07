@@ -37,12 +37,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="sasl-mechanisms" class="composite" source="list" provides="sasl-frame">
       <descriptor name="amqp:sasl-mechanisms:list" code="0x00000000:0x00000040"/>
       <field name="options" type="options"/>
-      <field name="sasl-server-mechanisms" type="string" mandatory="true" multiple="true"/>
+      <field name="sasl-server-mechanisms" type="symbol" mandatory="true" multiple="true"/>
     </type>
     <type name="sasl-init" class="composite" source="list" provides="sasl-frame">
       <descriptor name="amqp:sasl-init:list" code="0x00000000:0x00000041"/>
       <field name="options" type="options"/>
-      <field name="mechanism" type="string" mandatory="true"/>
+      <field name="mechanism" type="symbol" mandatory="true"/>
       <field name="initial-response" type="binary"/>
       <field name="hostname" type="string"/>
     </type>

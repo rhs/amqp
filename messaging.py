@@ -26,6 +26,7 @@ class Message:
   def __init__(self, content=None, delivery_tag=None, **kwargs):
     self.delivery_tag = delivery_tag
     self.header = Header()
+    self.annotations = None
     self.properties = Properties()
     self.content = content
     self.footer = Footer()
@@ -52,30 +53,41 @@ def encode(message):
   encoder = Connection.type_encoder
   # XXX: constants
   head = Fragment(True, True, 0, 0, 0, encoder.encode(message.header))
-  prop = Fragment(True, True, 1, 1, 0, encoder.encode(message.properties))
-  body = Fragment(True, True, 3, 2, 0, message.content)
-  foot = Fragment(True, True, 2, 3, 0, encoder.encode(message.footer))
+  prop = Fragment(True, True, 3, 1, 0, encoder.encode(message.properties))
+  body = Fragment(True, True, 5, 2, 0, message.content)
+  foot = Fragment(True, True, 9, 3, 0, encoder.encode(message.footer))
   return (head, prop, body, foot)
 
 def process_header(msg, bytes):
   msg.header = Connection.type_decoder.decode(bytes)[0]
+def process_delivery_annotations(msg, bytes):
+  # XXX: we drop these
+  print "warning, ignoring delivery annotations"
+def process_message_annotations(msg, bytes):
+  msg.annotations = Connection.type_decoder.decode(bytes)[0]
 def process_properties(msg, bytes):
   msg.properties = Connection.type_decoder.decode(bytes)[0]
-def process_footer(msg, bytes):
-  msg.footer = Connection.type_decoder.decode(bytes)[0]
+def process_application_properties(msg, bytes):
+  # XXX: we don't do anything with this yet
+  print "warning, ignoring app properties"
 def process_data(msg, bytes):
   msg.content = bytes
 def process_amqp_data(msg, bytes):
   msg.content = Connection.type_decoder.decode(bytes)[0]
+def process_footer(msg, bytes):
+  msg.footer = Connection.type_decoder.decode(bytes)[0]
 
 SECTION_PROCESSORS = {
   0: process_header,
-  1: process_properties,
-  2: process_footer,
-  3: process_data,
-  4: process_amqp_data,
-  5: process_amqp_data,
-  6: process_amqp_data
+  1: process_delivery_annotations,
+  2: process_message_annotations,
+  3: process_properties,
+  4: process_application_properties,
+  5: process_data,
+  6: process_amqp_data,
+  7: process_amqp_data,
+  8: process_amqp_data,
+  9: process_footer
   }
 
 def decode(transfer):

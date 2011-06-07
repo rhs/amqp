@@ -42,8 +42,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="max-frame-size" type="uint" default="4294967295"/>
       <field name="channel-max" type="ushort" default="65535"/>
       <field name="idle-time-out" type="milliseconds"/>
-      <field name="outgoing-locales" type="string" multiple="true"/>
-      <field name="incoming-locales" type="string" multiple="true"/>
+      <field name="outgoing-locales" type="symbol" multiple="true"/>
+      <field name="incoming-locales" type="symbol" multiple="true"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
       <field name="properties" type="fields"/>
@@ -199,6 +199,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <definition name="MAJOR" value="1"/>
     <definition name="MINOR" value="0"/>
     <definition name="REVISION" value="0"/>
-    <definition name="MIN-MAX-FRAME-SIZE" value="4096"/>
+    <definition name="MIN-MAX-FRAME-SIZE" value="512"/>
   </section>
 </amqp>

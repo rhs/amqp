@@ -18,25 +18,27 @@
 #
 
 import inspect
-from codec import Box, Described, Symbol
+from codec import Array, Value, Symbol, UNDESCRIBED
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name, key, type, mandatory, multiple, category,
-               default=None):
+  def __init__(self, name, key, type, source, descriptor, mandatory, multiple,
+               category, default=None):
     self.name = name
     self.key = key
     self.type = type
+    self.source = source
+    self.descriptor = descriptor
     self.mandatory = mandatory
     self.multiple = multiple
     self.category = category
     self.default = default
 
   def __repr__(self):
-    return "Field(%r, %r, %r, %r, %r, %r)" % \
-        (self.name, self.type, self.mandatory, self.multiple, self.category,
-         self.default)
+    return "Field(%r, %r, %r, %r, %r, %r, %r)" % \
+        (self.name, self.type, self.source, self.mandatory, self.multiple,
+         self.category, self.default)
 
 OPENS = "[("
 CLOSES = ")]"
@@ -49,8 +51,8 @@ class Composite(object):
       if args:
         v = args.pop(0)
         if f.multiple:
-          if isinstance(v, Described) and v.descriptor == True:
-            v = v.value
+          if isinstance(v, Array):
+            v = v.values
           elif v is not None:
             v = [v]
       else:
@@ -83,13 +85,11 @@ class Composite(object):
     if value is None:
       if field.mandatory:
         raise ValueError("%s: field %s is mandatory" % (self, field.name))
-    elif field.type is not None and field.category != "composite":
+    elif field.type is not None:
       if field.multiple:
-        value = [Box(field.type, v) for v in value]
+        value = Array(field.source, value, field.descriptor)
       else:
-        value = Box(field.type, value)
-    if field.multiple and value is not None:
-      value = Described(True, value)
+        value = Value(field.source, value, field.descriptor)
     return value
 
   def _defaulted(self, field):
@@ -180,16 +180,20 @@ def resolve(name, aliases):
   return name
 
 def load_composite(types, *default_bases, **kwargs):
-  aliases = {"*": None}
+  sources = {"*": None}
   classes = {}
   composite = []
   for nd in types:
     name = nd["@name"]
     cls = nd["@class"]
-    classes[name] = cls
-    if cls == "restricted":
-      aliases[name] = nd["@source"]
-    elif cls == "composite":
+    if nd["descriptor"]:
+      classes[name] = (cls, Symbol(str(nd["descriptor/@name"])),
+                       decode_numeric_desc(nd["descriptor/@code"]))
+    else:
+      classes[name] = (cls, UNDESCRIBED, UNDESCRIBED)
+    if nd["@source"]:
+      sources[name] = nd["@source"]
+    if cls == "composite":
       composite.append(nd)
 
   result = []
@@ -207,16 +211,22 @@ def load_composite(types, *default_bases, **kwargs):
     dict = {}
     dict["NAME"] = pythonize(nd["@name"])
     dict["ARCHETYPE"] = archetype
-    dict["DESCRIPTORS"] = (Symbol(str(nd["descriptor/@name"])),
-                           decode_numeric_desc(nd["descriptor/@code"]))
+    dict["DESCRIPTORS"] = classes.get(nd["@name"])[1:]
     dict["SOURCE"] = pythonize(nd["@source"])
-    encoded = [Field(pythonize(f["@name"]),
-                     Symbol(f["@name"]),
-                     pythonize(resolve(f["@type"], aliases)),
-                     f["@mandatory"] == "true",
-                     f["@multiple"] == "true",
-                     pythonize(classes.get(f["@type"])))
-               for f in nd.query["field"]]
+    encoded = []
+    for f in nd.query["field"]:
+      category, sym, num = classes.get(f["@type"], (None, UNDESCRIBED, UNDESCRIBED))
+      ftype = pythonize(f["@type"])
+      if ftype == "*":
+        ftype = None
+      encoded.append(Field(pythonize(f["@name"]),
+                           Symbol(f["@name"]),
+                           ftype,
+                           pythonize(resolve(f["@type"], sources)),
+                           num,
+                           f["@mandatory"] == "true",
+                           f["@multiple"] == "true",
+                           pythonize(category)))
     dict["ENCODED_FIELDS"] = encoded
     fields = encoded + \
         [f
@@ -227,4 +237,5 @@ def load_composite(types, *default_bases, **kwargs):
     assert len(fieldnames) == len(fields), "duplicate fields"
     dict["FIELDS"] = fields
     result.append(type(cls_name, bases, dict))
+
   return result
