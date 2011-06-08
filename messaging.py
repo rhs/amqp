@@ -18,8 +18,8 @@
 # under the License.
 #
 
-from protocol import Fragment, Header, Properties, Footer
-from connection import Connection
+from codec import Value
+from protocol import Header, Properties, Footer, PROTOCOL_DECODER, PROTOCOL_ENCODER
 
 class Message:
 
@@ -47,59 +47,86 @@ class Message:
             args.append("%s=%r" % (f, v))
     return "Message(%s)" % ", ".join(args)
 
-# XXX: encode(message) -> fragments, decode(transfer) -> message
+# XXX: encode: message -> str, decode: transfer -> message
 
 def encode(message):
-  encoder = Connection.type_encoder
-  # XXX: constants
-  head = Fragment(True, True, 0, 0, 0, encoder.encode(message.header))
-  prop = Fragment(True, True, 3, 1, 0, encoder.encode(message.properties))
-  body = Fragment(True, True, 5, 2, 0, message.content)
-  foot = Fragment(True, True, 9, 3, 0, encoder.encode(message.footer))
-  return (head, prop, body, foot)
+  encoder = PROTOCOL_ENCODER
+  encoded = ""
+  if message.header:
+    encoded += encoder.encode(message.header)
+  if message.properties:
+    encoded += encoder.encode(message.properties)
+  if message.content is not None:
+    # XXX: should dispatch
+    if isinstance(message.content, str):
+      encoded += encoder.encode(Value("binary", message.content,
+                                      Value("long", 0x75)))
+    elif isinstance(message.content, dict):
+      encoded += encoder.encode(Value("map", message.content,
+                                      Value("long", 0x77)))
+    else:
+      encoded += encoder.encode(Value("list", [message.content],
+                                      Value("long", 0x76)))
+  if message.footer:
+    encoded += encoder.encode(message.footer)
+  return encoded
 
-def process_header(msg, bytes):
-  msg.header = Connection.type_decoder.decode(bytes)[0]
-def process_delivery_annotations(msg, bytes):
+def process_header(msg, header):
+  msg.header = header
+def process_properties(msg, props):
+  msg.properties = props
+
+def process_delivery_annotations(msg, ann):
   # XXX: we drop these
-  print "warning, ignoring delivery annotations"
-def process_message_annotations(msg, bytes):
-  msg.annotations = Connection.type_decoder.decode(bytes)[0]
-def process_properties(msg, bytes):
-  msg.properties = Connection.type_decoder.decode(bytes)[0]
-def process_application_properties(msg, bytes):
+  print "warning, ignoring delivery annotations", ann
+def process_message_annotations(msg, ann):
+  msg.annotations = ann
+def process_application_properties(msg, props):
   # XXX: we don't do anything with this yet
-  print "warning, ignoring app properties"
-def process_data(msg, bytes):
-  msg.content = bytes
-def process_amqp_data(msg, bytes):
-  msg.content = Connection.type_decoder.decode(bytes)[0]
-def process_footer(msg, bytes):
-  msg.footer = Connection.type_decoder.decode(bytes)[0]
+  print "warning, ignoring app properties", props
+def process_data(msg, v):
+  msg.content = v.value
+def process_sequence(msg, v):
+  if msg.content is None:
+    msg.content = []
+  else:
+    msg.content.extend(v.value)
+def process_mappings(msg, v):
+  if msg.content is None:
+    msg.content = {}
+  else:
+    msg.content.update(v.value)
+
+VALUE_PROCESSORS = {
+  0x71: process_delivery_annotations,
+  0x72: process_message_annotations,
+  0x74: process_application_properties,
+  0x75: process_data,
+  0x76: process_sequence,
+  0x77: process_mappings
+  }
+
+def process_value(msg, value):
+  VALUE_PROCESSORS[value.descriptor](msg, value)
+def process_footer(msg, footer):
+  msg.footer = footer
 
 SECTION_PROCESSORS = {
-  0: process_header,
-  1: process_delivery_annotations,
-  2: process_message_annotations,
-  3: process_properties,
-  4: process_application_properties,
-  5: process_data,
-  6: process_amqp_data,
-  7: process_amqp_data,
-  8: process_amqp_data,
-  9: process_footer
+  Header: process_header,
+  Properties: process_properties,
+  Value: process_value,
+  Footer: process_footer
   }
 
 def decode(transfer):
   message = Message()
   message.delivery_tag = transfer.delivery_tag
-  fragments = transfer.fragments
+  remaining = transfer.payload
   sections = []
-  for f in fragments:
-    if f.first:
-      sections.append([f.section_code, ""])
-    sections[-1][-1] += f.payload
+  while remaining:
+    sect, remaining = PROTOCOL_DECODER.decode(remaining)
+    sections.append(sect)
   while sections:
-    code, payload = sections.pop(0)
-    SECTION_PROCESSORS[code](message, payload)
+    sect = sections.pop(0)
+    SECTION_PROCESSORS[sect.__class__](message, sect)
   return message

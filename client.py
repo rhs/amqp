@@ -237,7 +237,7 @@ class Sender(Link):
     self.wait(self.capacity)
     if message:
       kwargs["message_format"] = 0
-      kwargs["fragments"] = encode(message)
+      kwargs["payload"] = encode(message)
     return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 
 class Receiver(Link):

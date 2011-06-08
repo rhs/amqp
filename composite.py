@@ -36,9 +36,9 @@ class Field:
     self.default = default
 
   def __repr__(self):
-    return "Field(%r, %r, %r, %r, %r, %r, %r)" % \
-        (self.name, self.type, self.source, self.mandatory, self.multiple,
-         self.category, self.default)
+    return "Field(%r, %r, %r, %r, %r, %r, %r, %r, %r)" % \
+        (self.name, self.key, self.type, self.source, self.descriptor,
+         self.mandatory, self.multiple, self.category, self.default)
 
 OPENS = "[("
 CLOSES = ")]"

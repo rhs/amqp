@@ -17,12 +17,13 @@
 # under the License.
 #
 
-from codec import TYPES as TYPES_DOC, TypeDecoder, TypeEncoder
-from composite import Composite, load_composite
+from codec import TYPES as TYPES_DOC, TypeDecoder, TypeEncoder, Symbol, UNDESCRIBED
+from composite import Composite, load_composite, Field
 from util import load_xml, pythonize
 
 class Body(Composite):
-  pass
+  FIELDS=[Field("payload", Symbol("payload"), "binary", "binary", UNDESCRIBED,
+                False, None, "")]
 
 class FieldCompare(Composite):
 
@@ -45,8 +46,8 @@ TYPES = reduce(lambda x, y: x + y,
                [d.query["amqp/section/type"]
                 for d in [TYPES_DOC, TRANSPORT, MESSAGING, SECURITY,
                           TRANSACTIONS]])
-CLASSES = load_composite(TYPES, Composite, frame=Body, outcome=FieldCompare,
-                         TransferState=FieldCompare)
+CLASSES = load_composite(TYPES, Composite, frame=Body, sasl_frame=Body,
+                         outcome=FieldCompare, TransferState=FieldCompare)
 
 PROTOCOL_DECODER = TypeDecoder()
 PROTOCOL_ENCODER = TypeEncoder()
@@ -57,10 +58,10 @@ for cls in CLASSES:
                                                     v.deconstruct())
   for d in cls.DESCRIPTORS:
     if cls.SOURCE == "map":
-      const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
-                                            for (k, v) in m.iteritems()]))
+      const = lambda t, m, d, c=cls: c(**dict([(pythonize(k.name), v)
+                                               for (k, v) in m.iteritems()]))
     else:
-      const = lambda d, l, c=cls: c(*l)
+      const = lambda t, l, d, c=cls: c(*l)
     PROTOCOL_DECODER.constructors[d] = const
 
 __all__ = ["CLASSES", "PROTOCOL_DECODER", "PROTOCOL_ENCODER"]

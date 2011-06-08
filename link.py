@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from protocol import Attach, Flow, Transfer, Fragment, Disposition, Detach
+from protocol import Attach, Flow, Transfer, Disposition, Detach
 from util import Constant, RangeSet
 from uuid import uuid4
 
@@ -281,39 +281,18 @@ class Sender(Link):
   def xfr_overhead(self, xfr):
     return 192 + len(xfr.delivery_tag or "")
 
-  def frag_overhead(self, frag):
-    return 48
-
   def fragment(self, **kwargs):
-    fragments = list(kwargs.pop("fragments", []))
+    payload = kwargs.pop("payload", "")
     result = []
-    xfr = Transfer(**kwargs)
-    xfr.fragments = []
-    result.append(xfr)
-    remaining = self.session.max_frame_size - self.xfr_overhead(xfr)
-    while fragments:
-      f = fragments.pop(0)
-      remaining -= self.frag_overhead(f)
-      if len(f.payload) > remaining:
-        if remaining > 0:
-          p1 = f.payload[:remaining]
-          p2 = f.payload[remaining:]
-          f1 = Fragment(f.first, False, f.section_code, f.section_number,
-                        f.section_offset, p1)
-          f2 = Fragment(False, f.last, f.section_code, f.section_number,
-                        f.section_offset + remaining, p2)
-          fragments.insert(0, f2)
-          xfr.fragments.append(f1)
-        else:
-          fragments.insert(0, f)
-        xfr.more = True
-        xfr = Transfer(**kwargs)
-        result.append(xfr)
-        xfr.fragments = []
-        remaining = self.session.max_frame_size - self.xfr_overhead(xfr)
-      else:
-        xfr.fragments.append(f)
-        remaining -= len(f.payload)
+    while True:
+      xfr = Transfer(**kwargs)
+      max_size = self.session.max_frame_size - self.xfr_overhead(xfr)
+      xfr.payload = payload[:max_size]
+      payload = payload[max_size:]
+      if result: result[-1].more = True
+      result.append(xfr)
+      if not payload:
+        break
     return result
 
 class Receiver(Link):
@@ -324,7 +303,7 @@ class Receiver(Link):
   def init(self):
     self.incoming = []
     self.tag = None
-    self.fragments = []
+    self.payloads = []
 
   def do_transfer(self, xfr):
     self.session.incoming.append(self, xfr)
@@ -333,14 +312,15 @@ class Receiver(Link):
     elif self.tag != xfr.delivery_tag:
       raise ValueError("mismatched tags: %s, %s" % (self.tag, xfr.delivery_tag))
 
-    self.fragments.extend(xfr.fragments)
+    if xfr.payload:
+      self.payloads.extend(xfr.payload)
 
     if not xfr.more:
       self.tag = None
-      fragments = self.fragments
+      payload = "".join(self.payloads)
       self.tag = None
-      self.fragments = []
-      xfr.fragments = fragments
+      self.payloads = []
+      xfr.payload = payload
       self.incoming.append(xfr)
       self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
       self.link_credit -= 1

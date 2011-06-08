@@ -93,16 +93,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <descriptor name="amqp:transfer:list" code="0x00000000:0x00000014"/>
       <field name="options" type="options"/>
       <field name="handle" type="handle" mandatory="true"/>
-      <field name="delivery-tag" type="delivery-tag" mandatory="true"/>
       <field name="delivery-id" type="delivery-number" mandatory="true"/>
+      <field name="delivery-tag" type="delivery-tag"/>
+      <field name="message-format" type="message-format"/>
       <field name="settled" type="boolean" default="false"/>
       <field name="state" type="*" requires="delivery-state"/>
       <field name="resume" type="boolean" default="false"/>
       <field name="more" type="boolean" default="false"/>
       <field name="aborted" type="boolean" default="false"/>
       <field name="batchable" type="boolean" default="false"/>
-      <field name="message-format" type="message-format" mandatory="true"/>
-      <field name="fragments" type="fragment" multiple="true"/>
     </type>
     <type name="disposition" class="composite" source="list" provides="frame">
       <descriptor name="amqp:disposition:list" code="0x00000000:0x00000015"/>
@@ -145,15 +144,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="transfer-number" class="restricted" source="sequence-no"/>
     <type name="sequence-no" class="restricted" source="uint"/>
     <type name="message-format" class="restricted" source="uint"/>
-    <type name="fragment" class="composite" source="list">
-      <descriptor name="amqp:fragment:list" code="0x00000000:0x0000001c"/>
-      <field name="first" type="boolean" mandatory="true"/>
-      <field name="last" type="boolean" mandatory="true"/>
-      <field name="section-code" type="uint" mandatory="true"/>
-      <field name="section-number" type="uint" mandatory="true"/>
-      <field name="section-offset" type="ulong" default="0"/>
-      <field name="payload" type="binary"/>
-    </type>
     <type name="fields" class="restricted" source="map"/>
     <type name="options" class="restricted" source="fields"/>
     <type name="error" class="composite" source="list">
