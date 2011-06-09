@@ -70,14 +70,17 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="data" class="restricted" source="binary" provides="section">
       <descriptor name="amqp:data:binary" code="0x00000000:0x00000075"/>
     </type>
+    <type name="text" class="restricted" source="string" provides="section">
+      <descriptor name="amqp:text:string" code="0x00000000:0x00000076"/>
+    </type>
     <type name="sequence" class="restricted" source="list" provides="section">
-      <descriptor name="amqp:sequence:list" code="0x00000000:0x00000076"/>
+      <descriptor name="amqp:sequence:list" code="0x00000000:0x00000077"/>
     </type>
     <type name="mappings" class="restricted" source="map" provides="section">
-      <descriptor name="amqp:mappings:map" code="0x00000000:0x00000077"/>
+      <descriptor name="amqp:mappings:map" code="0x00000000:0x00000078"/>
     </type>
     <type name="footer" class="composite" source="list" provides="section">
-      <descriptor name="amqp:footer:list" code="0x00000000:0x00000078"/>
+      <descriptor name="amqp:footer:list" code="0x00000000:0x00000079"/>
       <field name="message-attrs" type="map"/>
       <field name="delivery-attrs" type="map"/>
     </type>

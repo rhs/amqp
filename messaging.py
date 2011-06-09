@@ -61,12 +61,15 @@ def encode(message):
     if isinstance(message.content, str):
       encoded += encoder.encode(Value("binary", message.content,
                                       Value("long", 0x75)))
+    elif isinstance(message.content, unicode):
+      encoded += encoder.encode(Value("string", message.content,
+                                      Value("long", 0x76)))
     elif isinstance(message.content, dict):
       encoded += encoder.encode(Value("map", message.content,
-                                      Value("long", 0x77)))
+                                      Value("long", 0x78)))
     else:
       encoded += encoder.encode(Value("list", [message.content],
-                                      Value("long", 0x76)))
+                                      Value("long", 0x77)))
   if message.footer:
     encoded += encoder.encode(message.footer)
   return encoded
@@ -85,7 +88,15 @@ def process_application_properties(msg, props):
   # XXX: we don't do anything with this yet
   print "warning, ignoring app properties", props
 def process_data(msg, v):
-  msg.content = v.value
+  if msg.content is None:
+    msg.content = v.value
+  else:
+    msg.content += v.value
+def process_text(msg, v):
+  if msg.content is None:
+    msg.content = v.value
+  else:
+    msg.content += v.value
 def process_sequence(msg, v):
   if msg.content is None:
     msg.content = []
@@ -102,8 +113,9 @@ VALUE_PROCESSORS = {
   0x72: process_message_annotations,
   0x74: process_application_properties,
   0x75: process_data,
-  0x76: process_sequence,
-  0x77: process_mappings
+  0x76: process_text,
+  0x77: process_sequence,
+  0x78: process_mappings
   }
 
 def process_value(msg, value):
