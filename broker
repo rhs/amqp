@@ -25,7 +25,8 @@ from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
 from queue import Queue
 from util import ConnectionSelectable
-from protocol import Target, Coordinator, Declare, Discharge, DeliveryState
+from protocol import Target, Coordinator, Declare, Discharge, DeliveryState, \
+    ACCEPTED
 from messaging import decode
 
 class Transaction:
@@ -286,8 +287,13 @@ class Broker:
         entry.acquire(txn)
         # XXX: consider using settlement rather than entry
         txn.add_work(lambda: entry.release(), lambda: entry.remove())
-      state = target.settle(xfr.delivery_tag)
-      link.settle(xfr.delivery_tag, state)
+      link.disposition(xfr.delivery_tag, ACCEPTED)
+
+    for t, _, r in link.get_remote():
+      if r.settled:
+        state = target.settle(t)
+        link.settle(t, state)
+
     if target.capacity() and link.credit() < 10: link.flow(10)
 
   def orphan_sender(self, link):

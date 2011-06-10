@@ -192,6 +192,15 @@ class Link:
     return dict(self.proto.unsettled)
 
   @synchronized
+  def pending(self, block=False, timeout=None):
+    if block:
+      self.wait(self._pending_unblocked, timeout)
+    return self.get_remote(modified=True)
+
+  def _pending_unblocked(self):
+    return not self.proto.unsettled or self.proto.get_remote(modified=True)
+
+  @synchronized
   def get_remote(self, *args, **kwargs):
     return self.proto.get_remote(*args, **kwargs)
 

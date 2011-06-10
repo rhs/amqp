@@ -74,10 +74,15 @@ try:
     else:
       content = " ".join(args[1:])
 
-    lnk.send(settled=True, message=Message(content))
+    lnk.send(settled=False, message=Message(content))
     count += 1
     if opts.sleep:
       time.sleep(opts.sleep)
+
+  while lnk.pending(True):
+    for t, l, r in lnk.pending():
+      print t, r.state
+      lnk.settle(t, r.state)
 except KeyboardInterrupt:
   pass
 
