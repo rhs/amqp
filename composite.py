@@ -36,9 +36,9 @@ class Field:
     self.default = default
 
   def __repr__(self):
-    return "Field(%r, %r, %r, %r, %r, %r, %r)" % \
-        (self.name, self.type, self.source, self.mandatory, self.multiple,
-         self.category, self.default)
+    return "Field(%r, %r, %r, %r, %r, %r, %r, %r, %r)" % \
+        (self.name, self.key, self.type, self.source, self.descriptor,
+         self.mandatory, self.multiple, self.category, self.default)
 
 OPENS = "[("
 CLOSES = ")]"
@@ -187,8 +187,9 @@ def load_composite(types, *default_bases, **kwargs):
     name = nd["@name"]
     cls = nd["@class"]
     if nd["descriptor"]:
-      classes[name] = (cls, Symbol(str(nd["descriptor/@name"])),
-                       decode_numeric_desc(nd["descriptor/@code"]))
+      sym = Symbol(str(nd["descriptor/@name"]))
+      num = Value("ulong", decode_numeric_desc(nd["descriptor/@code"]))
+      classes[name] = (cls, sym, num)
     else:
       classes[name] = (cls, UNDESCRIBED, UNDESCRIBED)
     if nd["@source"]:

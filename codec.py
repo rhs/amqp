@@ -85,6 +85,14 @@ class Value:
     else:
       return "Value(%r, %r, %r)" % (self.type, self.value, self.descriptor)
 
+  def __hash__(self):
+    return hash(self.value)
+
+  def __cmp__(self, o):
+    if isinstance(o, Value):
+      o = o.value
+    return cmp(self.value, o)
+
 class Symbol:
 
   def __init__(self, name):
@@ -262,17 +270,17 @@ class TypeDecoder:
     for enc in encodings:
       self.encodings[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
     self.constructors = {
-      UNDESCRIBED: lambda d, v: v
+      UNDESCRIBED: lambda t, v, d: v
       }
 
-  def construct(self, descriptor, value):
+  def construct(self, type, value, descriptor):
     constructor = self.constructors.get(descriptor, Value)
-    return constructor(descriptor, value)
+    return constructor(type, value, descriptor)
 
   def decode(self, bytes):
     descriptor, (encoding, decoder), bytes = self.decode_type(bytes)
     value, bytes = decoder(bytes)
-    return self.construct(descriptor, value), bytes
+    return self.construct(encoding.type, value, descriptor), bytes
 
   def decode_type(self, bytes):
     code, bytes = self.unpack("!B", bytes)
@@ -411,7 +419,7 @@ class TypeDecoder:
     values = []
     while count > 0:
       element, bytes = decoder(bytes)
-      values.append(self.construct(descriptor, element))
+      values.append(self.construct(encoding.type, element, descriptor))
       count -= 1
 
     return Array(encoding.type, values), bytes

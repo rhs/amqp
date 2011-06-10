@@ -57,10 +57,10 @@ for cls in CLASSES:
                                                     v.deconstruct())
   for d in cls.DESCRIPTORS:
     if cls.SOURCE == "map":
-      const = lambda d, m, c=cls: c(**dict([(pythonize(k.name), v)
+      const = lambda t, m, d, c=cls: c(**dict([(pythonize(k.name), v)
                                             for (k, v) in m.iteritems()]))
     else:
-      const = lambda d, l, c=cls: c(*l)
+      const = lambda t, l, d, c=cls: c(*l)
     PROTOCOL_DECODER.constructors[d] = const
 
 __all__ = ["CLASSES", "PROTOCOL_DECODER", "PROTOCOL_ENCODER"]
