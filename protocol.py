@@ -23,7 +23,7 @@ from util import load_xml, pythonize
 
 class Body(Composite):
   FIELDS=[Field("payload", Symbol("payload"), "binary", "binary", UNDESCRIBED,
-                False, None, "")]
+                False, False, None, "")]
 
 class FieldCompare(Composite):
 
