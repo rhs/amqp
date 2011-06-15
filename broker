@@ -93,7 +93,7 @@ class TxnTarget:
     self.unsettled[msg.delivery_tag] = self.coordinator.declare()
 
   def discharge(self, state, msg):
-    self.coordinator.discharge(state.txn_id, msg.content.fail)
+    self.coordinator.discharge(state.txn_id, msg.content[0].fail)
     self.unsettled[msg.delivery_tag] = state.txn_id
 
   def settle(self, dtag):
