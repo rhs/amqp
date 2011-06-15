@@ -87,7 +87,7 @@ class TxnTarget:
   def put(self, dtag, xfr):
     msg = decode(xfr)
     self.unsettled[dtag] = msg
-    self.dispatch[msg.content.__class__](xfr.state, msg)
+    self.dispatch[msg.content[0].__class__](xfr.state, msg)
 
   def declare(self, state, msg):
     self.unsettled[msg.delivery_tag] = self.coordinator.declare()

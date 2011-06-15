@@ -99,12 +99,12 @@ def process_text(msg, v):
     msg.content += v.value
 def process_sequence(msg, v):
   if msg.content is None:
-    msg.content = []
+    msg.content = list(v.value)
   else:
     msg.content.extend(v.value)
 def process_mappings(msg, v):
   if msg.content is None:
-    msg.content = {}
+    msg.content = dict(v.value)
   else:
     msg.content.update(v.value)
 
