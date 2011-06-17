@@ -60,16 +60,16 @@ def encode(message):
     # XXX: should dispatch
     if isinstance(message.content, str):
       encoded += encoder.encode(Value("binary", message.content,
-                                      Value("long", 0x75)))
+                                      Value("ulong", 0x75)))
     elif isinstance(message.content, unicode):
       encoded += encoder.encode(Value("string", message.content,
-                                      Value("long", 0x76)))
+                                      Value("ulong", 0x76)))
     elif isinstance(message.content, dict):
       encoded += encoder.encode(Value("map", message.content,
-                                      Value("long", 0x78)))
+                                      Value("ulong", 0x78)))
     else:
       encoded += encoder.encode(Value("list", [message.content],
-                                      Value("long", 0x77)))
+                                      Value("ulong", 0x77)))
   if message.footer:
     encoded += encoder.encode(message.footer)
   return encoded
