@@ -119,7 +119,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <descriptor name="amqp:source:list" code="0x00000000:0x00000028"/>
       <field name="options" type="options"/>
       <field name="address" type="*" requires="address"/>
-      <field name="durable" type="boolean"/>
+      <field name="durable" type="terminus-durability" default="none"/>
       <field name="expiry-policy" type="terminus-expiry-policy" default="session"/>
       <field name="timeout" type="seconds" default="0"/>
       <field name="dynamic" type="boolean"/>
@@ -134,12 +134,17 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <descriptor name="amqp:target:list" code="0x00000000:0x00000029"/>
       <field name="options" type="options"/>
       <field name="address" type="*" requires="address"/>
-      <field name="durable" type="boolean"/>
+      <field name="durable" type="terminus-durability" default="none"/>
       <field name="expiry-policy" type="terminus-expiry-policy" default="session"/>
       <field name="timeout" type="seconds" default="0"/>
       <field name="dynamic" type="boolean"/>
       <field name="dynamic-node-properties" type="node-properties"/>
       <field name="capabilities" type="symbol" multiple="true"/>
+    </type>
+    <type name="terminus-durability" class="restricted" source="uint">
+      <choice name="none" value="0"/>
+      <choice name="configuration" value="1"/>
+      <choice name="unsettled-state" value="2"/>
     </type>
     <type name="terminus-expiry-policy" class="restricted" source="symbol">
       <choice name="link-detach" value="link-detach"/>
