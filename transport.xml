@@ -36,21 +36,19 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   <section name="frame-bodies">
     <type name="open" class="composite" source="list" provides="frame">
       <descriptor name="amqp:open:list" code="0x00000000:0x00000010"/>
-      <field name="options" type="options"/>
       <field name="container-id" type="string" mandatory="true"/>
       <field name="hostname" type="string"/>
       <field name="max-frame-size" type="uint" default="4294967295"/>
       <field name="channel-max" type="ushort" default="65535"/>
       <field name="idle-time-out" type="milliseconds"/>
-      <field name="outgoing-locales" type="symbol" multiple="true"/>
-      <field name="incoming-locales" type="symbol" multiple="true"/>
+      <field name="outgoing-locales" type="ietf-language-tag" multiple="true"/>
+      <field name="incoming-locales" type="ietf-language-tag" multiple="true"/>
       <field name="offered-capabilities" type="symbol" multiple="true"/>
       <field name="desired-capabilities" type="symbol" multiple="true"/>
       <field name="properties" type="fields"/>
     </type>
     <type name="begin" class="composite" source="list" provides="frame">
       <descriptor name="amqp:begin:list" code="0x00000000:0x00000011"/>
-      <field name="options" type="options"/>
       <field name="remote-channel" type="ushort"/>
       <field name="next-outgoing-id" type="transfer-number" mandatory="true"/>
       <field name="incoming-window" type="uint" mandatory="true"/>
@@ -62,10 +60,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="attach" class="composite" source="list" provides="frame">
       <descriptor name="amqp:attach:list" code="0x00000000:0x00000012"/>
-      <field name="options" type="options"/>
       <field name="name" type="string" mandatory="true"/>
       <field name="handle" type="handle" mandatory="true"/>
       <field name="role" type="role" mandatory="true"/>
+      <field name="snd-settle-mode" type="sender-settle-mode" default="mixed"/>
+      <field name="rcv-settle-mode" type="receiver-settle-mode" default="first"/>
       <field name="source" type="*" requires="source"/>
       <field name="target" type="*" requires="target"/>
       <field name="unsettled" type="map"/>
@@ -77,7 +76,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="flow" class="composite" source="list" provides="frame">
       <descriptor name="amqp:flow:list" code="0x00000000:0x00000013"/>
-      <field name="options" type="options"/>
       <field name="next-incoming-id" type="transfer-number"/>
       <field name="incoming-window" type="uint" mandatory="true"/>
       <field name="next-outgoing-id" type="transfer-number" mandatory="true"/>
@@ -88,25 +86,24 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <field name="available" type="uint"/>
       <field name="drain" type="boolean" default="false"/>
       <field name="echo" type="boolean" default="false"/>
+      <field name="properties" type="fields"/>
     </type>
     <type name="transfer" class="composite" source="list" provides="frame">
       <descriptor name="amqp:transfer:list" code="0x00000000:0x00000014"/>
-      <field name="options" type="options"/>
       <field name="handle" type="handle" mandatory="true"/>
-      <field name="delivery-tag" type="delivery-tag" mandatory="true"/>
       <field name="delivery-id" type="delivery-number" mandatory="true"/>
+      <field name="delivery-tag" type="delivery-tag"/>
+      <field name="message-format" type="message-format"/>
       <field name="settled" type="boolean" default="false"/>
+      <field name="rcv-settle-mode" type="receiver-settle-mode"/>
       <field name="state" type="*" requires="delivery-state"/>
       <field name="resume" type="boolean" default="false"/>
       <field name="more" type="boolean" default="false"/>
       <field name="aborted" type="boolean" default="false"/>
       <field name="batchable" type="boolean" default="false"/>
-      <field name="message-format" type="message-format" mandatory="true"/>
-      <field name="fragments" type="fragment" multiple="true"/>
     </type>
     <type name="disposition" class="composite" source="list" provides="frame">
       <descriptor name="amqp:disposition:list" code="0x00000000:0x00000015"/>
-      <field name="options" type="options"/>
       <field name="role" type="role" mandatory="true"/>
       <field name="batchable" type="boolean" default="false"/>
       <field name="first" type="delivery-number" mandatory="true"/>
@@ -116,19 +113,16 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </type>
     <type name="detach" class="composite" source="list" provides="frame">
       <descriptor name="amqp:detach:list" code="0x00000000:0x00000016"/>
-      <field name="options" type="options"/>
       <field name="handle" type="handle" mandatory="true"/>
       <field name="closed" type="boolean" default="false"/>
       <field name="error" type="error"/>
     </type>
     <type name="end" class="composite" source="list" provides="frame">
       <descriptor name="amqp:end:list" code="0x00000000:0x00000017"/>
-      <field name="options" type="options"/>
       <field name="error" type="error"/>
     </type>
     <type name="close" class="composite" source="list" provides="frame">
       <descriptor name="amqp:close:list" code="0x00000000:0x00000018"/>
-      <field name="options" type="options"/>
       <field name="error" type="error"/>
     </type>
   </section>
@@ -136,6 +130,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="role" class="restricted" source="boolean">
       <choice name="sender" value="false"/>
       <choice name="receiver" value="true"/>
+    </type>
+    <type name="sender-settle-mode" class="restricted" source="ubyte">
+      <choice name="unsettled" value="0"/>
+      <choice name="settled" value="1"/>
+      <choice name="mixed" value="2"/>
+    </type>
+    <type name="receiver-settle-mode" class="restricted" source="ubyte">
+      <choice name="first" value="0"/>
+      <choice name="second" value="1"/>
     </type>
     <type name="handle" class="restricted" source="uint"/>
     <type name="seconds" class="restricted" source="uint"/>
@@ -145,15 +148,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <type name="transfer-number" class="restricted" source="sequence-no"/>
     <type name="sequence-no" class="restricted" source="uint"/>
     <type name="message-format" class="restricted" source="uint"/>
-    <type name="fragment" class="composite" source="list">
-      <descriptor name="amqp:fragment:list" code="0x00000000:0x0000001c"/>
-      <field name="first" type="boolean" mandatory="true"/>
-      <field name="last" type="boolean" mandatory="true"/>
-      <field name="section-code" type="uint" mandatory="true"/>
-      <field name="section-number" type="uint" mandatory="true"/>
-      <field name="section-offset" type="ulong" default="0"/>
-      <field name="payload" type="binary"/>
-    </type>
+    <type name="ietf-language-tag" class="restricted" source="symbol"/>
     <type name="fields" class="restricted" source="map"/>
     <type name="options" class="restricted" source="fields"/>
     <type name="error" class="composite" source="list">
@@ -193,6 +188,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <choice name="transfer-limit-exceeded" value="amqp:link:transfer-limit-exceeded"/>
       <choice name="message-size-exceeded" value="amqp:link:message-size-exceeded"/>
       <choice name="redirect" value="amqp:link:redirect"/>
+      <choice name="stolen" value="amqp:link:stolen"/>
     </type>
     <definition name="PORT" value="5672"/>
     <definition name="SECURE-PORT" value="5671"/>

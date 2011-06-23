@@ -86,13 +86,15 @@ class Dispatcher:
 
   def process_frame(self, f):
     body, remainder = self.type_decoder.decode(f.payload)
-    assert remainder == ""
+    body.payload = remainder
     self.trace("frm", "RECV[%s]: %s", f.channel, body.format(self.multiline))
     return getattr(self, "do_%s" % body.NAME, self.unhandled)(f.channel, body)
 
   def post_frame(self, channel, body):
     self.trace("frm", "SENT[%s]: %s", channel, body.format(self.multiline))
-    f = Frame(self.frame_type, channel, None, self.type_encoder.encode(body))
+    encoded = self.type_encoder.encode(body)
+    if body.payload: encoded += body.payload
+    f = Frame(self.frame_type, channel, None, encoded)
     self.output.write(encode(f))
 
   def read(self, n=None):

@@ -25,8 +25,8 @@ from link import LinkError, Receiver, Sender, link
 from selector import Acceptor, Selector
 from queue import Queue
 from util import ConnectionSelectable
-from protocol import Target, Coordinator, Declare, Discharge, DeliveryState, \
-    ACCEPTED
+from protocol import Target, Coordinator, Declare, Declared, Discharge, \
+    DeliveryState, ACCEPTED
 from messaging import decode
 
 class Transaction:
@@ -86,18 +86,18 @@ class TxnTarget:
 
   def put(self, dtag, xfr):
     msg = decode(xfr)
-    self.unsettled[dtag] = msg
     self.dispatch[msg.content.__class__](xfr.state, msg)
 
   def declare(self, state, msg):
-    self.unsettled[msg.delivery_tag] = self.coordinator.declare()
+    txn_id = self.coordinator.declare()
+    self.unsettled[msg.delivery_tag] = DeliveryState(outcome=Declared(txn_id))
 
   def discharge(self, state, msg):
-    self.coordinator.discharge(state.txn_id, msg.content.fail)
-    self.unsettled[msg.delivery_tag] = state.txn_id
+    self.coordinator.discharge(msg.content.txn_id, msg.content.fail)
+    self.unsettled[msg.delivery_tag] = ACCEPTED
 
   def settle(self, dtag):
-    return DeliveryState(txn_id=self.unsettled.pop(dtag))
+    return self.unsettled.pop(dtag)
 
   def orphaned(self):
     return True
@@ -249,9 +249,8 @@ class Broker:
         link.drained()
         break
       else:
-        # XXX: we should pass the format through
-        link.send(delivery_tag = tag, message_format = 0,
-                  fragments = xfr.fragments)
+        link.send(delivery_tag = tag, message_format = xfr.message_format,
+                  payload = xfr.payload)
 
     for t, _, r in link.get_remote(modified=True):
       if r.settled or r.state is not None:
