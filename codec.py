@@ -467,6 +467,9 @@ class TypeDecoder:
       count -= 1
     return constructor(result), bytes
 
+  def dec_list_list0(self, bytes):
+    return []
+
   def dec_list_list8(self, bytes):
     return self.dec_compound("!BB", bytes)
 
@@ -483,7 +486,7 @@ class TypeDecoder:
       values.append(self.construct(type, element))
       count -= 1
 
-    return Array(encoding.type, values), bytes
+    return Array(type, values), bytes
 
   def dec_array_array8(self, bytes):
     return self.dec_array("!BB", bytes)
