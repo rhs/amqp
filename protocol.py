@@ -17,13 +17,14 @@
 # under the License.
 #
 
-from codec import TYPES as TYPES_DOC, TypeDecoder, TypeEncoder, Symbol, UNDESCRIBED
+from codec import TYPES as TYPES_DOC, TypeDecoder, TypeEncoder, Symbol, \
+    Described, Primitive
 from composite import Composite, load_composite, Field
 from util import load_xml, pythonize
 
 class Body(Composite):
-  FIELDS=[Field("payload", Symbol("payload"), "binary", "binary", UNDESCRIBED,
-                False, False, None, "")]
+  FIELDS=[Field("payload", Symbol("payload"), Primitive("binary"), False, False,
+                "")]
 
 class FieldCompare(Composite):
 
@@ -53,15 +54,13 @@ PROTOCOL_DECODER = TypeDecoder()
 PROTOCOL_ENCODER = TypeEncoder()
 
 for cls in CLASSES:
-  PROTOCOL_ENCODER.deconstructors[cls] = lambda v: (v.DESCRIPTORS[0],
-                                                    v.SOURCE,
-                                                    v.deconstruct())
+  PROTOCOL_ENCODER.deconstructors[cls] = lambda v: (v.TYPE, v.deconstruct())
   for d in cls.DESCRIPTORS:
     if cls.SOURCE == "map":
-      const = lambda t, m, d, c=cls: c(**dict([(pythonize(k.name), v)
-                                               for (k, v) in m.iteritems()]))
+      const = lambda t, m, c=cls: c(**dict([(pythonize(k.name), v)
+                                            for (k, v) in m.iteritems()]))
     else:
-      const = lambda t, l, d, c=cls: c(*l)
+      const = lambda t, l, c=cls: c(*l)
     PROTOCOL_DECODER.constructors[d] = const
 
 __all__ = ["CLASSES", "PROTOCOL_DECODER", "PROTOCOL_ENCODER"]

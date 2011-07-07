@@ -18,27 +18,23 @@
 #
 
 import inspect
-from codec import Array, Value, Symbol, UNDESCRIBED
+from codec import Array, Described, Primitive, Value, Symbol
 from util import load_xml, pythonize, decode_numeric_desc
 
 class Field:
 
-  def __init__(self, name, key, type, source, descriptor, mandatory, multiple,
-               category, default=None):
+  def __init__(self, name, key, type, mandatory, multiple, default=None):
     self.name = name
     self.key = key
     self.type = type
-    self.source = source
-    self.descriptor = descriptor
     self.mandatory = mandatory
     self.multiple = multiple
-    self.category = category
     self.default = default
 
   def __repr__(self):
-    return "Field(%r, %r, %r, %r, %r, %r, %r, %r, %r)" % \
-        (self.name, self.key, self.type, self.source, self.descriptor,
-         self.mandatory, self.multiple, self.category, self.default)
+    return "Field(%r, %r, %r, %r, %r, %r)" % \
+        (self.name, self.key, self.type, self.mandatory, self.multiple,
+         self.default)
 
 OPENS = "[("
 CLOSES = ")]"
@@ -68,7 +64,7 @@ class Composite(object):
       raise TypeError("got unexpected keyword argument '%s'" % kwargs.keys()[0])
 
   def deconstruct(self):
-    return getattr(self, "deconstruct_%s" % self.SOURCE)()
+    return getattr(self, "deconstruct_%s" % self.SOURCE.name)()
 
   def deconstruct_list(self):
     return [self.deconstruct_field(f) for f in self.ENCODED_FIELDS]
@@ -87,9 +83,9 @@ class Composite(object):
         raise ValueError("%s: field %s is mandatory" % (self, field.name))
     elif field.type is not None:
       if field.multiple:
-        value = Array(field.source, value, field.descriptor)
+        value = Array(field.type, value)
       else:
-        value = Value(field.source, value, field.descriptor)
+        value = Value(field.type, value)
     return value
 
   def _defaulted(self, field):
@@ -181,20 +177,18 @@ def resolve(name, aliases):
 
 def load_composite(types, *default_bases, **kwargs):
   sources = {"*": None}
-  classes = {}
+  descriptors = {}
   composite = []
   for nd in types:
     name = nd["@name"]
-    cls = nd["@class"]
     if nd["descriptor"]:
       sym = Symbol(str(nd["descriptor/@name"]))
-      num = Value("ulong", decode_numeric_desc(nd["descriptor/@code"]))
-      classes[name] = (cls, sym, num)
-    else:
-      classes[name] = (cls, UNDESCRIBED, UNDESCRIBED)
+      num = Value(Primitive("ulong"),
+                  decode_numeric_desc(nd["descriptor/@code"]))
+      descriptors[name] = (num, sym)
     if nd["@source"]:
       sources[name] = nd["@source"]
-    if cls == "composite":
+    if nd["@class"] == "composite":
       composite.append(nd)
 
   result = []
@@ -212,22 +206,24 @@ def load_composite(types, *default_bases, **kwargs):
     dict = {}
     dict["NAME"] = pythonize(nd["@name"])
     dict["ARCHETYPE"] = archetype
-    dict["DESCRIPTORS"] = classes.get(nd["@name"])[1:]
-    dict["SOURCE"] = pythonize(nd["@source"])
+    dict["DESCRIPTORS"] = descriptors.get(nd["@name"])
+    dict["SOURCE"] = Primitive(pythonize(nd["@source"]))
+    dict["TYPE"] = Described(dict["DESCRIPTORS"][0], dict["SOURCE"])
     encoded = []
     for f in nd.query["field"]:
-      category, sym, num = classes.get(f["@type"], (None, UNDESCRIBED, UNDESCRIBED))
+      d = descriptors.get(f["@type"])
       ftype = pythonize(f["@type"])
       if ftype == "*":
         ftype = None
+      else:
+        ftype = Primitive(pythonize(resolve(f["@type"], sources)))
+      if d:
+        ftype = Described(d[0], ftype)
       encoded.append(Field(pythonize(f["@name"]),
                            Symbol(f["@name"]),
                            ftype,
-                           pythonize(resolve(f["@type"], sources)),
-                           num,
                            f["@mandatory"] == "true",
-                           f["@multiple"] == "true",
-                           pythonize(category)))
+                           f["@multiple"] == "true"))
     dict["ENCODED_FIELDS"] = encoded
     fields = encoded + \
         [f

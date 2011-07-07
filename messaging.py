@@ -18,7 +18,7 @@
 # under the License.
 #
 
-from codec import Value
+from codec import Value, Described, Primitive
 from protocol import Header, Properties, Footer, PROTOCOL_DECODER, PROTOCOL_ENCODER
 
 class Message:
@@ -47,6 +47,10 @@ class Message:
             args.append("%s=%r" % (f, v))
     return "Message(%s)" % ", ".join(args)
 
+def udesc(num, source, value):
+  return Value(Described(Value(Primitive("ulong"), num), Primitive(source)),
+               value)
+
 # XXX: encode: message -> str, decode: transfer -> message
 
 def encode(message):
@@ -59,17 +63,11 @@ def encode(message):
   if message.content is not None:
     # XXX: should dispatch
     if isinstance(message.content, str):
-      encoded += encoder.encode(Value("binary", message.content,
-                                      Value("ulong", 0x75)))
-    elif isinstance(message.content, unicode):
-      encoded += encoder.encode(Value("string", message.content,
-                                      Value("ulong", 0x76)))
-    elif isinstance(message.content, dict):
-      encoded += encoder.encode(Value("map", message.content,
-                                      Value("ulong", 0x78)))
+      encoded += encoder.encode(udesc(0x75, "binary", message.content))
+    elif isinstance(message.content, (list, tuple)):
+      encoded += encoder.encode(udesc(0x76, "list", message.content))
     else:
-      encoded += encoder.encode(Value("list", [message.content],
-                                      Value("ulong", 0x77)))
+      encoded += encoder.encode(udesc(0x77, None, message.content))
   if message.footer:
     encoded += encoder.encode(message.footer)
   return encoded
@@ -115,7 +113,7 @@ VALUE_PROCESSORS = {
   }
 
 def process_value(msg, value):
-  VALUE_PROCESSORS[value.descriptor](msg, value)
+  VALUE_PROCESSORS[value.type.descriptor](msg, value)
 def process_footer(msg, footer):
   msg.footer = footer
 

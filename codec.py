@@ -20,70 +20,73 @@
 import datetime, struct, time, uuid, cStringIO
 from util import pythonize, load_xml, identity, Constant
 
-class Encoding:
+class Type:
+  pass
 
-  def __init__(self, name, type, code, category, width):
-    self.name = name
-    self.type = type
-    self.code = code
-    self.category = category
-    self.width = width
+class Described(Type):
+
+  def __init__(self, descriptor, source):
+    self.descriptor = descriptor
+    self.source = source
+
+  def construct(self, factory, value):
+    return factory.construct_described(self, value)
+
+  def encode(self, encoder, value):
+    return encoder.encode_described(self, value)
+
+  def __hash__(self):
+    return hash((self.descriptor, self.source))
+
+  def __cmp__(self, o):
+    if isinstance(o, Described):
+      return cmp((self.descriptor, self.source), (o.descriptor, o.source))
+    else:
+      return -1
 
   def __repr__(self):
-    return "Encoding(%r, %r, %r, %r, %r)" % \
-        (self.name, self.type, self.code, self.category, self.width)
+    return "Described(%r, %r)" % (self.descriptor, self.source)
 
-def load_encodings(doc):
-  result = []
-  for enc in doc.query["amqp/section/type/encoding",
-                       lambda n: n.parent["@class"] == "primitive"]:
-    type_name = pythonize(enc.parent["@name"])
-    if enc["@name"]:
-      enc_name = "%s_%s" % (type_name, pythonize(enc["@name"]))
+class Primitive(Type):
+
+  def __init__(self, name):
+    self.name = name
+
+  def construct(self, factory, value):
+    return factory.construct_primitive(self, value)
+
+  def encode(self, encoder, value):
+    return encoder.encode_primitive(self, value)
+
+  def __hash__(self):
+    return hash(self.name)
+
+  def __cmp__(self, o):
+    if isinstance(o, Primitive):
+      return cmp(self.name, o.name)
     else:
-      enc_name = type_name
-    code = int(enc["@code"], 0)
-    category = pythonize(enc["@category"])
-    width = int(enc["@width"], 0)
-    result.append(Encoding(enc_name, type_name, code, category, width))
-  return result
+      return -1
 
-TYPES = load_xml("types.xml")
-ENCODINGS = load_encodings(TYPES)
-
-WIDTH_CODES = {
-  1: "B",
-  2: "H",
-  4: "I"
-  }
-
-UNDESCRIBED = Constant("UNDESCRIBED")
+  def __repr__(self):
+    return "Primitive(%r)" % self.name
 
 class Array:
 
-  def __init__(self, type, values, descriptor=UNDESCRIBED):
+  def __init__(self, type, values):
     self.type = type
     self.values = values
-    self.descriptor = descriptor
 
   def __repr__(self):
-    if self.descriptor is UNDESCRIBED:
-      return "Array(%r, %r)" % (self.type, self.values)
-    else:
-      return "Array(%r, %r, %r)" % (self.type, self.values, self.descriptor)
+    return "Array(%r, %r)" % (self.type, self.values)
 
 class Value:
 
-  def __init__(self, type, value, descriptor=UNDESCRIBED):
+  def __init__(self, type, value):
     self.type = type
     self.value = value
-    self.descriptor = descriptor
 
   def __repr__(self):
-    if self.descriptor is UNDESCRIBED:
-      return "Value(%r, %r)" % (self.type, self.value)
-    else:
-      return "Value(%r, %r, %r)" % (self.type, self.value, self.descriptor)
+    return "Value(%r, %r)" % (self.type, self.value)
 
   def __hash__(self):
     return hash(self.value)
@@ -109,6 +112,43 @@ class Symbol:
 
 # XXX: sym instead of Symbol?
 
+class Encoding:
+
+  def __init__(self, name, type, code, category, width):
+    self.name = name
+    self.type = type
+    self.code = code
+    self.category = category
+    self.width = width
+
+  def __repr__(self):
+    return "Encoding(%r, %r, %r, %r, %r)" % \
+        (self.name, self.type, self.code, self.category, self.width)
+
+def load_encodings(doc):
+  result = []
+  for enc in doc.query["amqp/section/type/encoding",
+                       lambda n: n.parent["@class"] == "primitive"]:
+    type_name = pythonize(enc.parent["@name"])
+    if enc["@name"]:
+      enc_name = "%s_%s" % (type_name, pythonize(enc["@name"]))
+    else:
+      enc_name = type_name
+    code = int(enc["@code"], 0)
+    category = pythonize(enc["@category"])
+    width = int(enc["@width"], 0)
+    result.append(Encoding(enc_name, Primitive(type_name), code, category, width))
+  return result
+
+TYPES = load_xml("types.xml")
+ENCODINGS = load_encodings(TYPES)
+
+WIDTH_CODES = {
+  1: "B",
+  2: "H",
+  4: "I"
+  }
+
 class TypeEncoder:
 
   def __init__(self, encodings=ENCODINGS):
@@ -121,49 +161,63 @@ class TypeEncoder:
           self.encodings[enc.type] = enc
       else:
         self.encodings[enc.type] = enc
-      self.encoders[enc.type] = getattr(self, "enc_%s" % enc.type)
+      self.encoders[enc.type] = getattr(self, "enc_%s" % enc.type.name)
     self.types = {
-      bool: "boolean",
-      int: "long",  # the boundary between int and long is
-      long: "long", # platform specific, so we treat them the
-                    # same to avoid platform dependencies
-      float: "double", # python floats are actually doubles
-      datetime.datetime: "timestamp",
-      dict: "map",
-      list: "list",
-      tuple: "list",
-      Array: "array",
-      unicode: "string",
+      bool: Primitive("boolean"),
+      int: Primitive("long"),  # the boundary between int and long is
+      long: Primitive("long"), # platform specific, so we treat them the
+                               # same to avoid platform dependencies
+      float: Primitive("double"), # python floats are actually doubles
+      datetime.datetime: Primitive("timestamp"),
+      dict: Primitive("map"),
+      list: Primitive("list"),
+      tuple: Primitive("list"),
+      Array: Primitive("array"),
+      unicode: Primitive("string"),
       # XXX: the mapping choice here is a bit tricky given python's
       # blurring beween string and binary data
-      str: "string",
-      Symbol: "symbol",
-      buffer: "binary",
-      uuid.UUID: "uuid",
-      None.__class__: "null"
+      str: Primitive("string"),
+      Symbol: Primitive("symbol"),
+      buffer: Primitive("binary"),
+      uuid.UUID: Primitive("uuid"),
+      None.__class__: Primitive("null")
       }
     self.deconstructors = {
       Value: self.deconstruct_value,
       }
 
   def deconstruct_value(self, v):
-    return v.descriptor, v.type, v.value
+    return v.type, v.value
 
   def default_deconstructor(self, v):
-    return UNDESCRIBED, self.types[v.__class__], v
+    return self.types[v.__class__], v
 
   def deconstruct(self, value):
     deconstructor = self.deconstructors.get(value.__class__, self.default_deconstructor)
     return deconstructor(value)
 
   def encode(self, value):
-    descriptor, type, value = self.deconstruct(value)
-    code = struct.pack("!B", self.encodings[type].code)
-    encoded = self.encoders[type](value)
-    if descriptor is UNDESCRIBED:
-      return "%s%s" % (code, encoded)
+    type, value = self.deconstruct(value)
+    encoder, encoded = self.encode_type(type, value)
+    return "%s%s" % (encoded, encoder(value))
+
+  def encode_type(self, type, value):
+    return type.encode(self, value)
+
+  def encode_described(self, type, value):
+    if type.source is None:
+      source, value = self.deconstruct(value)
     else:
-      return "\x00%s%s%s" % (self.encode(descriptor), code, encoded)
+      source = type.source
+    encoder, encoded = self.encode_type(source, value)
+    return encoder, "\x00%s%s" % (self.encode(type.descriptor), encoded)
+
+  def encode_primitive(self, type, value):
+    if type is None:
+      type, value = self.deconstruct(value)
+    enc = self.encodings[type]
+    encoder = self.encoders[enc.type]
+    return encoder, struct.pack("!B", enc.code)
 
   def enc_null(self, n):
     return ""
@@ -243,20 +297,14 @@ class TypeEncoder:
     return self.enc_binary("%s%s" % (struct.pack("!I", len(l)), encoded))
 
   def enc_array(self, a):
-    descriptor = a.descriptor
     type = a.type
-    encoding = self.encodings[type]
-    encoder = self.encoders[type]
-    code = struct.pack("!B", encoding.code)
+    encoder, etype = self.encode_type(type, None)
     count = struct.pack("!I", len(a.values))
     # XXX: should check that deconstructed value matches array type & descriptor
     encoded = "".join([encoder(self.deconstruct(v)[-1]) for v in a.values])
 
-    if descriptor is UNDESCRIBED:
-      return self.enc_binary("%s%s%s" % (count, code, encoded))
-    else:
-      return self.enc_binary("%s\x00%s%s%s" % (count, self.encode(descriptor), code, encoded))
-
+    return self.enc_binary("%s%s%s" % (count, etype, encoded))
+ 
   def enc_map(self, m):
     pairs = []
     for pair in m.items():
@@ -269,27 +317,40 @@ class TypeDecoder:
     self.encodings = {}
     for enc in encodings:
       self.encodings[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
-    self.constructors = {
-      UNDESCRIBED: lambda t, v, d: v
-      }
+    self.constructors = {}
+    self.described = {}
+    self.primitive = {}
 
-  def construct(self, type, value, descriptor):
-    constructor = self.constructors.get(descriptor, Value)
-    return constructor(type, value, descriptor)
+  def construct(self, type, value):
+    return type.construct(self, value)
+
+  def construct_primitive(self, type, value):
+    return value
+
+  def construct_described(self, type, value):
+    value = self.construct(type.source, value)
+    cons = self.constructors.get(type.descriptor, Value)
+    return cons(type, value)
 
   def decode(self, bytes):
-    descriptor, (encoding, decoder), bytes = self.decode_type(bytes)
+    type, decoder, bytes = self.decode_type(bytes)
     value, bytes = decoder(bytes)
-    return self.construct(encoding.type, value, descriptor), bytes
+    return self.construct(type, value), bytes
 
   def decode_type(self, bytes):
     code, bytes = self.unpack("!B", bytes)
     if code == 0:
       descriptor, bytes = self.decode(bytes)
-      code, bytes = self.unpack("!B", bytes)
+      source, decoder, bytes = self.decode_type(bytes)
+      if descriptor in self.described:
+        described = self.described[descriptor]
+      else:
+        described = Described(descriptor, source)
+        self.described[descriptor] = described
+      return described, decoder, bytes
     else:
-      descriptor = UNDESCRIBED
-    return descriptor, self.encodings[code], bytes
+      encoding, decoder = self.encodings[code]
+      return encoding.type, decoder, bytes
 
   def unpack(self, format, bytes, constructor=identity):
     n = struct.calcsize(format)
@@ -414,12 +475,12 @@ class TypeDecoder:
 
   def dec_array(self, format, bytes, constructor=identity):
     (size, count), bytes = self.unpack(format, bytes, lambda s, c: (s, c))
-    descriptor, (encoding, decoder), bytes = self.decode_type(bytes)
+    type, decoder, bytes = self.decode_type(bytes)
 
     values = []
     while count > 0:
       element, bytes = decoder(bytes)
-      values.append(self.construct(encoding.type, element, descriptor))
+      values.append(self.construct(type, element))
       count -= 1
 
     return Array(encoding.type, values), bytes
