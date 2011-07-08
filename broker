@@ -26,7 +26,7 @@ from selector import Acceptor, Selector
 from queue import Queue
 from util import ConnectionSelectable
 from protocol import Target, Coordinator, Declare, Declared, Discharge, \
-    DeliveryState, ACCEPTED
+    TransactionalState, ACCEPTED
 from messaging import decode
 
 class Transaction:
@@ -62,8 +62,8 @@ class TxnCoordinator:
       txn.discharge(fail)
 
   def get_transaction(self, state):
-    txn_id = state.txn_id
-    if txn_id is not None:
+    if isinstance(state, TransactionalState):
+      txn_id = state.txn_id
       if txn_id in self.transactions:
         return self.transactions[txn_id]
       else:
@@ -90,7 +90,7 @@ class TxnTarget:
 
   def declare(self, state, msg):
     txn_id = self.coordinator.declare()
-    self.unsettled[msg.delivery_tag] = DeliveryState(outcome=Declared(txn_id))
+    self.unsettled[msg.delivery_tag] = Declared(txn_id)
 
   def discharge(self, state, msg):
     self.coordinator.discharge(msg.content.txn_id, msg.content.fail)

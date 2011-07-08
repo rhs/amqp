@@ -19,7 +19,9 @@
 #
 
 from codec import Value, Described, Primitive
-from protocol import Header, Properties, Footer, PROTOCOL_DECODER, PROTOCOL_ENCODER
+from protocol import Header, DeliveryAnnotations, MessageAnnotations, \
+    Properties, ApplicationProperties, Data, AmqpSequence, AmqpValue, Footer, \
+    PROTOCOL_DECODER, PROTOCOL_ENCODER
 
 class Message:
 
@@ -29,7 +31,7 @@ class Message:
     self.annotations = None
     self.properties = Properties()
     self.content = content
-    self.footer = Footer()
+    self.footer = Footer({})
     for k, v in kwargs.items():
       for o in (self.header, self.properties, self.footer):
         if hasattr(o, k):
@@ -47,10 +49,6 @@ class Message:
             args.append("%s=%r" % (f, v))
     return "Message(%s)" % ", ".join(args)
 
-def udesc(num, source, value):
-  return Value(Described(Value(Primitive("ulong"), num), Primitive(source)),
-               value)
-
 # XXX: encode: message -> str, decode: transfer -> message
 
 def encode(message):
@@ -63,11 +61,11 @@ def encode(message):
   if message.content is not None:
     # XXX: should dispatch
     if isinstance(message.content, str):
-      encoded += encoder.encode(udesc(0x75, "binary", message.content))
+      encoded += encoder.encode(Data(message.content))
     elif isinstance(message.content, (list, tuple)):
-      encoded += encoder.encode(udesc(0x76, "list", message.content))
+      encoded += encoder.encode(AmqpSequence(message.content))
     else:
-      encoded += encoder.encode(udesc(0x77, None, message.content))
+      encoded += encoder.encode(AmqpValue(message.content))
   if message.footer:
     encoded += encoder.encode(message.footer)
   return encoded
@@ -90,11 +88,6 @@ def process_data(msg, v):
     msg.content = v.value
   else:
     msg.content += v.value
-def process_text(msg, v):
-  if msg.content is None:
-    msg.content = v.value
-  else:
-    msg.content += v.value
 def process_sequence(msg, v):
   if msg.content is None:
     msg.content = list(v.value)
@@ -102,25 +95,18 @@ def process_sequence(msg, v):
     msg.content.extend(v.value)
 def process_value(msg, v):
   msg.content = v.value
-
-VALUE_PROCESSORS = {
-  0x71: process_delivery_annotations,
-  0x72: process_message_annotations,
-  0x74: process_application_properties,
-  0x75: process_data,
-  0x76: process_sequence,
-  0x77: process_value
-  }
-
-def process_value(msg, value):
-  VALUE_PROCESSORS[value.type.descriptor](msg, value)
 def process_footer(msg, footer):
   msg.footer = footer
 
 SECTION_PROCESSORS = {
   Header: process_header,
+  DeliveryAnnotations: process_delivery_annotations,
+  MessageAnnotations: process_message_annotations,
   Properties: process_properties,
-  Value: process_value,
+  ApplicationProperties: process_application_properties,
+  Data: process_data,
+  AmqpSequence: process_sequence,
+  AmqpValue: process_value,
   Footer: process_footer
   }
 

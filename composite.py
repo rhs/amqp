@@ -41,6 +41,18 @@ CLOSES = ")]"
 
 class Composite(object):
 
+  @classmethod
+  def construct(cls, t, v):
+    return getattr(cls, "construct_%s" % cls.SOURCE.name)(t, v)
+
+  @classmethod
+  def construct_map(cls, t, m):
+    return cls(**dict([(pythonize(k.name), v) for (k, v) in m.iteritems()]))
+
+  @classmethod
+  def construct_list(cls, t, l):
+    return cls(*l)
+
   def __init__(self, *args, **kwargs):
     args = list(args)
     for f in self.FIELDS:
@@ -151,7 +163,7 @@ class Composite(object):
     kwa = sep.join(self._keyword_args(multiline))
     ora = sep.join(self._ordinal_args(multiline))
 
-    if self.ARCHETYPE == "frame" or len(kwa) < len(ora):
+    if "frame" in self.ARCHETYPES or len(kwa) < len(ora):
       a = kwa
     else:
       a = ora
@@ -170,44 +182,68 @@ class Composite(object):
   def __repr__(self):
     return self.format()
 
+class Restricted(object):
+
+  @classmethod
+  def construct(cls, t, v):
+    return cls(v)
+
+  def __init__(self, value):
+    self.value = value
+
+  def deconstruct(self):
+    return self.value
+
+  def __repr__(self):
+    return "%s(%r)" % (self.__class__.__name__, self.value)
+
 def resolve(name, aliases):
   while name in aliases:
     name = aliases[name]
   return name
 
-def load_composite(types, *default_bases, **kwargs):
+# XXX: naming, this does restricted too
+def load_composite(types, **kwargs):
   sources = {"*": None}
   descriptors = {}
   composite = []
   for nd in types:
     name = nd["@name"]
+    if nd["@source"]:
+      sources[name] = nd["@source"]
     if nd["descriptor"]:
       sym = Symbol(str(nd["descriptor/@name"]))
       num = Value(Primitive("ulong"),
                   decode_numeric_desc(nd["descriptor/@code"]))
       descriptors[name] = (num, sym)
-    if nd["@source"]:
-      sources[name] = nd["@source"]
-    if nd["@class"] == "composite":
       composite.append(nd)
 
   result = []
 
   for nd in composite:
-    archetype = pythonize(nd["@provides"])
+    archetypes = \
+        [p.strip() for p in pythonize(nd["@provides"] or "").split(",")]
     cls_name = pythonize(nd["@name"], camel=True)
     if cls_name in kwargs:
       bases = kwargs[cls_name]
     else:
-      bases = kwargs.get(archetype, default_bases)
+      bases = ()
+      for arch in archetypes:
+        b = kwargs.get(arch, ())
+        if inspect.isclass(b):
+          bases += (b,)
+        else:
+          bases += b
+      if not bases:
+        bases = kwargs.get(nd["@class"], ())
     if inspect.isclass(bases):
       bases = (bases,)
 
     dict = {}
     dict["NAME"] = pythonize(nd["@name"])
-    dict["ARCHETYPE"] = archetype
+    dict["ARCHETYPES"] = archetypes
     dict["DESCRIPTORS"] = descriptors.get(nd["@name"])
-    dict["SOURCE"] = Primitive(pythonize(nd["@source"]))
+    dict["SOURCE"] = Primitive(pythonize(resolve(nd["@source"], sources)))
     dict["TYPE"] = Described(dict["DESCRIPTORS"][0], dict["SOURCE"])
     encoded = []
     for f in nd.query["field"]:
