@@ -468,7 +468,7 @@ class TypeDecoder:
     return constructor(result), bytes
 
   def dec_list_list0(self, bytes):
-    return []
+    return [], bytes
 
   def dec_list_list8(self, bytes):
     return self.dec_compound("!BB", bytes)
