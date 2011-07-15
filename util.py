@@ -110,7 +110,7 @@ class ConnectionSelectable:
   def timing(self):
     return self._timing
 
-  def timeout(self):
+  def timeout(self, selector):
     self._timing = time.time() + self.period
     self._timeout(self.connection)
 
@@ -122,7 +122,7 @@ class ConnectionSelectable:
     self.tick(self.connection)
     return self.connection.pending()
 
-  def readable(self):
+  def readable(self, selector):
     # XXX: hardcoded buffer size
     try:
       bytes = self.socket.recv(64*1024)
@@ -133,11 +133,11 @@ class ConnectionSelectable:
     except:
       self.connection.trace("err", traceback.format_exc().strip())
       # XXX: need to signal connection so it can cleanup links
+    selector.unregister(self)
     self.socket.close()
-    # XXX: need to unregister
     self.socket = None
 
-  def writeable(self):
+  def writeable(self, selector):
     try:
       n = self.socket.send(self.connection.peek())
       bytes = self.connection.read(n)
@@ -145,8 +145,8 @@ class ConnectionSelectable:
     except:
       self.connection.trace("err", traceback.format_exc().strip())
       # XXX: need to signal connection so it can cleanup links
+    selector.unregister(self)
     self.socket.close()
-    # XXX: need to unregister
     self.socket = None
 
 class Range:

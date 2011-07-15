@@ -59,7 +59,7 @@ class common_selectable_waiter:
   def reading(self):
     return True
 
-  def readable(self):
+  def readable(self, selector):
     self._do_read()
 
 if sys.platform in ('win32', 'cygwin'):

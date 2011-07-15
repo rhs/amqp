@@ -39,9 +39,9 @@ class Acceptor:
   def timing(self):
     return None
 
-  def readable(self):
+  def readable(self, selector):
     sock, addr = self.sock.accept()
-    self.handler(sock)
+    self.handler(sock, selector)
 
 class Selector:
 
@@ -127,19 +127,19 @@ class Selector:
       is_idle = True
       for sel in wr:
         if sel.writing():
-          sel.writeable()
+          sel.writeable(self)
           is_idle = False
 
       for sel in rd:
         if sel.reading():
-          sel.readable()
+          sel.readable(self)
           is_idle = False
 
       now = time.time()
       for sel in self.selectables.copy():
         w = sel.timing()
         if w is not None and now > w:
-          sel.timeout()
+          sel.timeout(self)
           is_idle = False
 
       if is_idle and idle:
