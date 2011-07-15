@@ -48,6 +48,8 @@ class Link(object):
     self.target = target
     self.remote_source = None
     self.remote_target = None
+    self.snd_settle_mode = None
+    self.rcv_settle_mode = None
 
     self.session = None
     self.handle = None
@@ -134,6 +136,8 @@ class Link(object):
       self.delivery_count = attach.initial_delivery_count
     self.remote_source = attach.source
     self.remote_target = attach.target
+    self.snd_settle_mode = attach.snd_settle_mode
+    self.rcv_settle_mode = attach.rcv_settle_mode
 
   # XXX: closing and errors
   def detach(self, closed=False):

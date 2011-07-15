@@ -298,6 +298,7 @@ class Broker:
         break
       else:
         link.send(delivery_tag = tag, message_format = xfr.message_format,
+                  settled = link.snd_settle_mode == 1, # XXX: enums
                   payload = xfr.payload)
 
     for t, _, r in link.get_remote(modified=True):
@@ -336,6 +337,9 @@ class Broker:
         # XXX: consider using settlement rather than entry
         txn.add_work(lambda: entry.release(), lambda: entry.remove())
       link.disposition(xfr.delivery_tag, ACCEPTED)
+      # XXX: enums
+      if link.rcv_settle_mode == 0:
+        link.settle(xfr.delivery_tag)
 
     for t, _, r in link.get_remote():
       if r.settled:
