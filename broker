@@ -76,7 +76,7 @@ try:
   broker.auth = opts.auth
   broker.mechanisms = mechanisms
   broker.passwords = passwords
-  broker.trace = opts.trace.split()
+  broker.traces = opts.trace.split()
 
   nodes = {}
   for n in opts.nodes:
