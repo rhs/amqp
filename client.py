@@ -189,7 +189,7 @@ class Link:
 
   @synchronized
   def get_unsettled(self):
-    return dict(self.proto.unsettled)
+    return self.proto.get_local(settled=False)
 
   @synchronized
   def pending(self, block=False, timeout=None):
@@ -198,7 +198,7 @@ class Link:
     return self.get_remote(modified=True)
 
   def _pending_unblocked(self):
-    return not self.proto.unsettled or self.proto.get_remote(modified=True)
+    return not self.proto.get_local(settled=False) or self.proto.get_remote(modified=True)
 
   @synchronized
   def get_remote(self, *args, **kwargs):
