@@ -64,14 +64,14 @@ class Target:
   def capacity(self):
     return self.hole.capacity()
 
-  def put(self, tag, message):
-    pass
+  def put(self, tag, message, owner=None):
+    return ACCEPTED
 
   def resume(self, unsettled):
     pass
 
-  def settle(self, tag):
-    return ACCEPTED
+  def settle(self, tag, state):
+    return state
 
   def close(self):
     pass

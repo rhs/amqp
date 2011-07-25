@@ -198,7 +198,7 @@ class TypeEncoder:
 
   def encode(self, value):
     type, value = self.deconstruct(value)
-    encoder, encoded = self.encode_type(type, value)
+    encoder, encoded, value = self.encode_type(type, value)
     return "%s%s" % (encoded, encoder(value))
 
   def encode_type(self, type, value):
@@ -209,15 +209,17 @@ class TypeEncoder:
       source, value = self.deconstruct(value)
     else:
       source = type.source
-    encoder, encoded = self.encode_type(source, value)
-    return encoder, "\x00%s%s" % (self.encode(type.descriptor), encoded)
+    encoder, encoded, value = self.encode_type(source, value)
+    return encoder, "\x00%s%s" % (self.encode(type.descriptor), encoded), value
 
   def encode_primitive(self, type, value):
-    if type is None:
+    if type.name is None:
       type, value = self.deconstruct(value)
-    enc = self.encodings[type]
-    encoder = self.encoders[enc.type]
-    return encoder, struct.pack("!B", enc.code)
+      return self.encode_type(type, value)
+    else:
+      enc = self.encodings[type]
+      encoder = self.encoders[enc.type]
+      return encoder, struct.pack("!B", enc.code), value
 
   def enc_null(self, n):
     return ""
@@ -298,7 +300,7 @@ class TypeEncoder:
 
   def enc_array(self, a):
     type = a.type
-    encoder, etype = self.encode_type(type, None)
+    encoder, etype, _ = self.encode_type(type, None)
     count = struct.pack("!I", len(a.values))
     # XXX: should check that deconstructed value matches array type & descriptor
     encoded = "".join([encoder(self.deconstruct(v)[-1]) for v in a.values])
@@ -318,8 +320,6 @@ class TypeDecoder:
     for enc in encodings:
       self.encodings[enc.code] = (enc, getattr(self, "dec_%s" % enc.name))
     self.constructors = {}
-    self.described = {}
-    self.primitive = {}
 
   def construct(self, type, value):
     return type.construct(self, value)
@@ -342,12 +342,7 @@ class TypeDecoder:
     if code == 0:
       descriptor, bytes = self.decode(bytes)
       source, decoder, bytes = self.decode_type(bytes)
-      if descriptor in self.described:
-        described = self.described[descriptor]
-      else:
-        described = Described(descriptor, source)
-        self.described[descriptor] = described
-      return described, decoder, bytes
+      return Described(descriptor, source), decoder, bytes
     else:
       encoding, decoder = self.encodings[code]
       return encoding.type, decoder, bytes

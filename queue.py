@@ -169,19 +169,28 @@ class Target(Terminus):
 
   def __init__(self, queue):
     self.queue = queue
+    self.unsettled = {}
 
   def capacity(self):
     return self.queue.capacity()
 
-  def put(self, tag, message):
-    return self.queue.put(message)
+  def put(self, tag, message, owner=None):
+    entry = self.queue.put(message)
+    entry.acquire(owner)
+    self.unsettled[tag] = entry
+    return ACCEPTED
 #    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
     pass
 
-  def settle(self, tag):
-    return ACCEPTED
+  def settle(self, tag, state):
+    entry = self.unsettled.pop(tag)
+    if state is None:
+      entry.remove()
+    else:
+      entry.release()
+    return state
 
   def close(self):
     # XXX: ???

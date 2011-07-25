@@ -46,6 +46,9 @@ parser.add_option("-i", "--stdin", action="store_true",
                   help="read messages from stdin (one message per line)")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
+parser.add_option("-x", "--txn", action="store_true",
+                  help="send transactionally")
+parser.add_option("-r", "--rollback", action="store_true")
 
 opts, args = parser.parse_args()
 
@@ -65,6 +68,11 @@ lnk = ssn.sender(addr, name=opts.link)
 
 count = 0
 try:
+  if opts.txn:
+    txn = ssn.declare()
+  else:
+    txn = None
+
   while opts.count == 0 or count < opts.count:
     if opts.stdin:
       try:
@@ -74,10 +82,13 @@ try:
     else:
       content = " ".join(args[1:])
 
-    lnk.send(settled=False, message=Message(content))
+    lnk.send(settled=False, message=Message(content), txn=txn)
     count += 1
     if opts.sleep:
       time.sleep(opts.sleep)
+
+  if opts.txn:
+    ssn.discharge(txn, fail=opts.rollback)
 
   while lnk.pending(True):
     for t, l, r in lnk.pending():
@@ -93,5 +104,5 @@ else:
 ssn.close()
 conn.close()
 
-for tag, (local, remote) in lnk.get_unsettled():
+for tag, local, remote in lnk.get_unsettled():
   print "UNSETTLED:", tag, local, remote

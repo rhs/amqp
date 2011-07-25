@@ -311,6 +311,8 @@ class Receiver(Link):
 
   def do_transfer(self, xfr):
     self.session.incoming.append(self, xfr)
+    if self.session.next_receiver_id is None:
+      self.session.next_receiver_id = xfr.delivery_id
     if self.tag is None:
       self.tag = xfr.delivery_tag
     elif self.tag != xfr.delivery_tag:
@@ -350,7 +352,9 @@ class Receiver(Link):
 
   def get(self):
     if self.incoming:
-      return self.incoming.pop(0)
+      xfr = self.incoming.pop(0)
+      self.session.update_next_receiver(xfr)
+      return xfr
     else:
       raise LinkError("empty")
 

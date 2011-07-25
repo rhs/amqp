@@ -30,7 +30,8 @@ from util import ConnectionSelectable, Constant
 from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
-from protocol import Source, Target, ACCEPTED
+from protocol import Source, Target, ACCEPTED, Accepted, Coordinator, Declare, \
+    Discharge, TransactionalState
 
 class Timeout(Exception):
   pass
@@ -131,6 +132,7 @@ class Session:
     self.connection = connection
     self._lock = self.connection._lock
     self.timeout = 120
+    self.txn = None
     self.proto.begin()
 
   def wait(self, predicate, timeout=DEFAULT):
@@ -140,7 +142,9 @@ class Session:
 
   @synchronized
   def sender(self, target, name=None):
-    snd = Sender(self.connection, name or str(uuid4()), Target(address=target))
+    if isinstance(target, basestring):
+      target = Target(address=target)
+    snd = Sender(self.connection, name or str(uuid4()), target)
     self.proto.add(snd.proto)
     snd.proto.attach()
     self.wait(lambda: snd.proto.attached() or snd.proto.detaching())
@@ -170,6 +174,32 @@ class Session:
   @synchronized
   def set_incoming_window(self, *args, **kwargs):
     return self.proto.set_incoming_window(*args, **kwargs)
+
+  def _txn_link(self):
+    if self.txn is None:
+      self.txn = self.sender(Coordinator(), "txn-%s" % uuid4())
+
+  @synchronized
+  def declare(self, timeout=None):
+    self._txn_link()
+    self.txn.send(Message(Declare(), delivery_tag="declare"))
+    for t, l, r in self.txn.pending(block=True, timeout=timeout):
+      if t == "declare":
+        self.txn.settle(t)
+        return r.state.txn_id
+    else:
+      raise SessionError("transaction declare failed")
+
+  @synchronized
+  def discharge(self, txn, fail=False, timeout=None):
+    self._txn_link()
+    self.txn.send(Message(Discharge(txn_id=txn, fail=fail), delivery_tag="discharge"))
+    for t, l, r in self.txn.pending(block=True, timeout=timeout):
+      if t == "discharge":
+        self.txn.settle(t)
+        break
+    else:
+      raise SessionError("transaction discharge failed")
 
   @synchronized
   def close(self):
@@ -242,11 +272,15 @@ class Sender(Link):
     self.proto = ProtoSender(name, None, target)
 
   @synchronized
-  def send(self, message=None, delivery_tag=None, **kwargs):
+  def send(self, message=None, delivery_tag=None, txn=None, **kwargs):
     self.wait(self.capacity)
     if message:
       kwargs["message_format"] = 0
       kwargs["payload"] = encode(message)
+      if delivery_tag is None:
+        delivery_tag = message.delivery_tag
+    if txn is not None:
+      kwargs["state"] = TransactionalState(buffer(txn))
     return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 
 class Receiver(Link):

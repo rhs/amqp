@@ -43,6 +43,7 @@ class Session:
 
     self.incoming = Incoming()
     self.outgoing = Outgoing()
+    self.next_receiver_id = None
     self.roles = {Sender.role: self.outgoing,
                   Receiver.role: self.incoming}
 
@@ -187,6 +188,23 @@ class Session:
   def tick(self):
     for link in self.links.values():
       link.tick()
+
+  def update_next_receiver(self, xfr):
+    if xfr.delivery_id == self.next_receiver_id:
+      self.next_receiver_id += 1
+
+  def next_receiver(self):
+    if self.next_receiver_id is None or self.next_receiver_id > self.incoming.unsettled_hwm:
+      return None
+
+    while True:
+      d = self.incoming.get_delivery(self.next_receiver_id)
+      if d:
+        return d[0]
+      elif self.next_receiver_id < self.unsettled_hwm:
+        self.next_receiver_id += 1
+      else:
+        return None
 
 class DeliveryMap:
 

@@ -46,6 +46,9 @@ parser.add_option("-s", "--sleep", type=float,
                   help="sleep between fetches for indicated period")
 parser.add_option("-t", "--trace", default="err",
                   help="enable tracing for specified categories")
+parser.add_option("-x", "--txn", action="store_true",
+                  help="send transactionally")
+parser.add_option("-r", "--rollback", action="store_true")
 
 opts, args = parser.parse_args()
 
@@ -69,6 +72,11 @@ lnk = ssn.receiver(addr, limit=credit, drain=not opts.block, name=opts.link)
 
 count = 0
 try:
+  if opts.txn:
+    txn = ssn.declare()
+  else:
+    txn = None
+
   while lnk.pending(block=True):
     msg = lnk.get()
     count += 1
@@ -76,7 +84,10 @@ try:
     sys.stdout.flush()
     if opts.sleep:
       time.sleep(opts.sleep)
-    lnk.disposition(msg.delivery_tag, ACCEPTED)
+    disp = ACCEPTED
+    if txn:
+      disp = TransactionalState(txn, disp)
+    lnk.disposition(msg.delivery_tag, disp)
     if lnk.pending() < 10 and lnk.credit() == 0:
       if opts.count == 0:
         credit = 10
@@ -84,6 +95,9 @@ try:
         credit = min(10, opts.count - (count + lnk.pending()))
       if credit:
         lnk.flow(credit, drain=not opts.block)
+
+  if opts.txn:
+    ssn.discharge(txn, fail=opts.rollback)
 except KeyboardInterrupt:
   pass
 
@@ -98,5 +112,5 @@ conn.close()
 for tag, _, _ in lnk.get_remote(settled=True):
   lnk.settle(tag)
 
-for tag, (local, remote) in lnk.get_unsettled():
+for tag, local, remote in lnk.get_unsettled():
   print "UNSETTLED:", tag, local, remote
