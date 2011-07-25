@@ -54,12 +54,12 @@ class Connection(Dispatcher):
   def opening(self):
     return self.open_rcvd and not self.open_sent
 
-  def opened(self):
+  def is_opened(self):
     return self.open_rcvd and self.open_sent and \
         not (self.close_rcvd or self.close_sent)
 
-  def closed(self):
-    self.close_rcvd and self.close_sent
+  def is_closed(self):
+    return self.close_rcvd and self.close_sent
 
   def closing(self):
     return self.close_rcvd and not self.close_sent
@@ -97,6 +97,11 @@ class Connection(Dispatcher):
   def do_close(self, channel, close):
     if not self.close_rcvd:
       self.close_rcvd = True
+
+  def closed(self):
+    Dispatcher.closed(self)
+    self.close_rcvd = True
+    self.close_sent = True
 
   def add(self, ssn):
     ssn.channel = self.allocate_channel()

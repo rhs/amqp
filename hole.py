@@ -19,6 +19,7 @@
 
 from messaging import Message, encode
 from protocol import ACCEPTED, Transfer
+from queue import Terminus
 
 class Hole:
 
@@ -39,9 +40,10 @@ class Hole:
   def target(self):
     return Target(self)
 
-class Source:
+class Source(Terminus):
 
   def __init__(self, hole):
+    Terminus.__init__(self)
     self.hole = hole
 
   def get(self):
@@ -59,6 +61,7 @@ class Source:
 class Target:
 
   def __init__(self, hole):
+    Terminus.__init__(self)
     self.hole = hole
 
   def capacity(self):

@@ -108,12 +108,23 @@ class Queue:
 
 class Terminus:
 
+  def __init__(self):
+    self._durable = False
+
+  def configure(self, definition):
+    self._durable = definition.durable
+    return definition
+
+  def durable(self):
+    return self._durable
+
   def orphaned(self):
     return False
 
 class Source(Terminus):
 
   def __init__(self, next, acquire, dequeue):
+    Terminus.__init__(self)
     self.next = next
     self.acquire = acquire
     self.dequeue = dequeue
@@ -168,6 +179,7 @@ class Source(Terminus):
 class Target(Terminus):
 
   def __init__(self, queue):
+    Terminus.__init__(self)
     self.queue = queue
     self.unsettled = {}
 

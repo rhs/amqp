@@ -84,6 +84,10 @@ class Connection:
     self.sasl.write(bytes)
 
   @synchronized
+  def closed(self):
+    self.sasl.closed()
+
+  @synchronized
   def tick(self, connection):
     self.proto.tick()
     self.sasl.tick()

@@ -49,20 +49,27 @@ class Dispatcher:
       names.add("err")
     self._tracing = names
 
-  def trace(self, category, format, *args):
-    if category in self._tracing:
-      prefix = "[%s %s]" % (self.id, category)
-      if args:
-        message = format % args
-      else:
-        message = format
-      print >> sys.stderr, prefix, \
-          message.replace(os.linesep, "%s%s " % (os.linesep, prefix))
+  def trace(self, categories, format, *args):
+    if isinstance(categories, basestring):
+      categories = (categories,)
+    for category in categories:
+      if category in self._tracing:
+        prefix = "[%s %s]" % (self.id, category)
+        if args:
+          message = format % args
+        else:
+          message = format
+        print >> sys.stderr, prefix, \
+            message.replace(os.linesep, "%s%s " % (os.linesep, prefix))
+        break
 
   def write(self, bytes):
     self.trace("raw", "RECV: %r", bytes)
     self.input.write(bytes)
     self.state = parse(self.state)
+
+  def closed(self):
+    self.trace(("raw", "frm"), "CLOSED")
 
   def __proto_header(self):
     if self.input.pending() >= PROTO_HDR_SIZE:

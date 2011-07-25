@@ -130,6 +130,9 @@ class ConnectionSelectable:
         self.connection.write(bytes)
         self.tick(self.connection)
         return
+      else:
+        self.connection.closed()
+        self.tick(self.connection)
     except:
       self.connection.trace("err", traceback.format_exc().strip())
       # XXX: need to signal connection so it can cleanup links

@@ -79,6 +79,9 @@ class TxnTarget:
     self.coordinator = coordinator
     self.dispatch = {Declare: self.declare, Discharge: self.discharge}
 
+  def configure(self, dfn):
+    return dfn
+
   def capacity(self):
     return True
 
@@ -103,6 +106,9 @@ class TxnTarget:
   def close(self):
     pass
 
+  def durable(self):
+    return False
+
 class Broker:
 
   def __init__(self, container_id):
@@ -123,10 +129,10 @@ class Broker:
                    Receiver.role: self.attach_receiver}
     self.process = {Sender.role: self.process_sender,
                     Receiver.role: self.process_receiver}
-    self.orphan = {Sender.role: self.orphan_sender,
-                   Receiver.role: self.orphan_receiver}
     self.detach = {Sender.role: self.detach_sender,
                    Receiver.role: self.detach_receiver}
+    self.orphan = {Sender.role: self.orphan_sender,
+                   Receiver.role: self.orphan_receiver}
     self.resolvers = {Target: self.resolve_target,
                       Coordinator: self.resolve_coordinator}
 
@@ -229,7 +235,7 @@ class Broker:
         if link.detaching():
           self.detach[link.role](link)
           link.detach()
-        elif ssn.ending():
+        elif ssn.ending() or connection.closing() or connection.is_closed():
           self.orphan[link.role](link)
 
         if link.detached():
@@ -256,8 +262,9 @@ class Broker:
     elif link.remote_source.address in self.nodes:
       n = self.nodes[link.remote_source.address]
       source = n.source()
+      local_source = source.configure(link.remote_source)
       self.sources[link.name] = source
-      link.source = link.remote_source
+      link.source = local_source
       link.target = link.remote_target
       return True
     else:
@@ -278,11 +285,12 @@ class Broker:
         return False
       else:
         target = n.target()
+        local_target = target.configure(link.remote_target)
         self.targets[link.name] = target
         if target.capacity():
           link.flow(20)
         link.source = link.remote_source
-        link.target = link.remote_target
+        link.target = local_target
         return True
 
   def resolve(self, target):
@@ -374,15 +382,19 @@ class Broker:
       del self.targets[link.name]
 
   def detach_sender(self, link):
-    if link.source and link.remote_source is None:
-      source = self.sources.pop(link.name)
-      source.close()
-      link.source = link.remote_source
-      link.target = link.remote_target
+    if link.source:
+      source = self.sources[link.name]
+      if link.remote_source is None or not source.durable():
+        del self.sources[link.name]
+        source.close()
+        link.source = link.remote_source
+        link.target = link.remote_target
 
   def detach_receiver(self, link):
-    if link.target and link.remote_target is None:
-      target = self.targets.pop(link.name)
-      target.close()
-      link.source = link.remote_source
-      link.target = link.remote_target
+    if link.target:
+      target = self.targets[link.name]
+      if link.remote_target is None or not target.durable():
+        del self.targets[link.name]
+        target.close()
+        link.source = link.remote_source
+        link.target = link.remote_target
