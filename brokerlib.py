@@ -24,7 +24,7 @@ from sasl import SASL
 from session import Session, SessionError, FIXED
 from link import LinkError, Receiver, Sender, link
 from util import ConnectionSelectable
-from protocol import Target, Coordinator, Declare, Declared, Discharge, \
+from protocol import Source, Target, Coordinator, Declare, Declared, Discharge, \
     TransactionalState, ACCEPTED
 from messaging import decode
 
@@ -134,6 +134,7 @@ class Broker:
     self.orphan = {Sender.role: self.orphan_sender,
                    Receiver.role: self.orphan_receiver}
     self.resolvers = {Target: self.resolve_target,
+                      Source: self.resolve_source,
                       Coordinator: self.resolve_coordinator}
 
     self.sock = None
@@ -260,7 +261,7 @@ class Broker:
       link.target = link.remote_target
       return True
     elif link.remote_source.address in self.nodes:
-      n = self.nodes[link.remote_source.address]
+      n = self.resolve(link.remote_source)
       source = n.source()
       local_source = source.configure(link.remote_source)
       self.sources[link.name] = source
@@ -293,11 +294,17 @@ class Broker:
         link.target = local_target
         return True
 
-  def resolve(self, target):
-    return self.resolvers[target.__class__](target)
+  def resolve(self, terminus):
+    return self.resolvers[terminus.__class__](terminus)
 
   def resolve_target(self, target):
-    return self.nodes.get(target.address)
+    return self.resolve_terminus(target)
+
+  def resolve_source(self, source):
+    return self.resolve_terminus(source)
+
+  def resolve_terminus(self, terminus):
+    return self.nodes.get(terminus.address)
 
   def resolve_coordinator(self, target):
     return self.coordinator
