@@ -82,7 +82,7 @@ try:
     else:
       content = " ".join(args[1:])
 
-    lnk.send(settled=False, message=Message(content), txn=txn)
+    lnk.send(settled=False, message=Message(content, message_id=count), txn=txn)
     count += 1
     if opts.sleep:
       time.sleep(opts.sleep)

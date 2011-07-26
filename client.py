@@ -88,6 +88,10 @@ class Connection:
     self.sasl.closed()
 
   @synchronized
+  def error(self, exc):
+    self.sasl.error(exc)
+
+  @synchronized
   def tick(self, connection):
     self.proto.tick()
     self.sasl.tick()

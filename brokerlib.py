@@ -51,24 +51,21 @@ class TxnCoordinator:
     self.next_id = 0
 
   def declare(self):
-    id = buffer(str(self.next_id))
+    id = str(self.next_id)
     self.next_id += 1
+    self.transactions[id] = Transaction(id)
     return id
 
   def discharge(self, txn_id, fail):
-    if txn_id in self.transactions:
-      txn = self.transactions.pop(txn_id)
-      txn.discharge(fail)
+    txn = self.transactions.pop(txn_id)
+    txn.discharge(fail)
 
   def get_transaction(self, state):
     if isinstance(state, TransactionalState):
       txn_id = state.txn_id
-      if txn_id in self.transactions:
-        return self.transactions[txn_id]
-      else:
-        txn = Transaction(txn_id)
-        self.transactions[txn_id] = txn
-        return txn
+      return self.transactions[txn_id]
+    else:
+      return None
 
   def target(self):
     return TxnTarget(self)
@@ -90,12 +87,14 @@ class TxnTarget:
     return self.dispatch[msg.content.__class__](xfr.state, msg)
 
   def declare(self, state, msg):
-    txn_id = self.coordinator.declare()
-    return Declared(txn_id)
+    return Declared(buffer(self.coordinator.declare()))
 
   def discharge(self, state, msg):
-    self.coordinator.discharge(msg.content.txn_id, msg.content.fail)
-    return ACCEPTED
+    try:
+      self.coordinator.discharge(msg.content.txn_id, msg.content.fail)
+      return ACCEPTED
+    except KeyError:
+      return Rejected(Error("amqp:transaction:unknown-id"))
 
   def settle(self, dtag, state):
     return state
@@ -225,14 +224,15 @@ class Broker:
             link.attach()
             link.detach()
 
+      for link in links:
+        self.process[link.role](link)
+
       while True:
         link = ssn.next_receiver()
         if link is None: break
         self.process_incoming(link)
 
       for link in links:
-        self.process[link.role](link)
-
         if link.detaching():
           self.detach[link.role](link)
           link.detach()
@@ -328,8 +328,9 @@ class Broker:
           state = source.settle(t, r.state)
           link.settle(t, state)
         def undo(t=t):
-          state = source.settle(t, None)
-          link.settle(t, state)
+          pass
+#          state = source.settle(t, None)
+#          link.settle(t, state)
         if r.state:
           txn = self.coordinator.get_transaction(r.state)
         else:

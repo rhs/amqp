@@ -17,7 +17,7 @@
 # under the License.
 #
 
-import os, mllib, traceback, time
+import os, sys, mllib, traceback, time
 
 __SELF__ = object()
 
@@ -134,8 +134,10 @@ class ConnectionSelectable:
         self.connection.closed()
         self.tick(self.connection)
     except:
-      self.connection.trace("err", traceback.format_exc().strip())
-      # XXX: need to signal connection so it can cleanup links
+      cls, exc, tb = sys.exc_info()
+      self.connection.trace("err", "".join(traceback.format_exception(cls, exc, tb)).strip())
+      self.connection.error(exc)
+      self.tick(self.connection)
     selector.unregister(self)
     self.socket.close()
     self.socket = None
@@ -146,8 +148,10 @@ class ConnectionSelectable:
       bytes = self.connection.read(n)
       return
     except:
-      self.connection.trace("err", traceback.format_exc().strip())
-      # XXX: need to signal connection so it can cleanup links
+      cls, exc, tb = sys.exc_info()
+      self.connection.trace("err", "".join(traceback.format_exception(cls, exc, tb)).strip())
+      self.connection.error(exc)
+      self.tick(self.connection)
     selector.unregister(self)
     self.socket.close()
     self.socket = None

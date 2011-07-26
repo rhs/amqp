@@ -103,6 +103,11 @@ class Connection(Dispatcher):
     self.close_rcvd = True
     self.close_sent = True
 
+  def error(self, exc):
+    Dispatcher.error(self, exc)
+    self.close_rcvd = True
+    self.close_sent = True
+
   def add(self, ssn):
     ssn.channel = self.allocate_channel()
     ssn.max_frame_size = self.max_frame_size

@@ -71,6 +71,9 @@ class Dispatcher:
   def closed(self):
     self.trace(("raw", "frm"), "CLOSED")
 
+  def error(self, exc):
+    pass
+
   def __proto_header(self):
     if self.input.pending() >= PROTO_HDR_SIZE:
       hdr = self.input.read(PROTO_HDR_SIZE)
