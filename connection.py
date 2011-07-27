@@ -39,6 +39,7 @@ class Connection(Dispatcher):
     self.open_sent = False
     self.close_rcvd = False
     self.close_sent = False
+    self.exception = None
 
     # incoming channel -> session
     self.incoming = {}
@@ -48,7 +49,8 @@ class Connection(Dispatcher):
     self.max_frame_size = 4294967295
 
   def post_frame(self, channel, body):
-    assert not self.close_sent, str(body)
+    # XXX: if we hit an error then we pretend we've sent a close
+    assert not self.close_sent or self.exception is not None, str(body)
     return Dispatcher.post_frame(self, channel, body)
 
   def opening(self):
@@ -107,6 +109,7 @@ class Connection(Dispatcher):
     Dispatcher.error(self, exc)
     self.close_rcvd = True
     self.close_sent = True
+    self.exception = exc
 
   def add(self, ssn):
     ssn.channel = self.allocate_channel()

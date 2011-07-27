@@ -129,16 +129,22 @@ class ConnectionSelectable:
     except:
       cls, exc, tb = sys.exc_info()
       self.connection.trace("err", "".join(traceback.format_exception(cls, exc, tb)).strip())
-      self.connection.error(exc)
-      self.tick(self.connection)
+      try:
+        self.connection.error(exc)
+        self.tick(self.connection)
+      except:
+        self.connection.trace("err", traceback.format_exc().strip())
     else:
-      if bytes:
-        self.connection.write(bytes)
-        self.tick(self.connection)
-        return
-      else:
-        self.connection.closed()
-        self.tick(self.connection)
+      try:
+        if bytes:
+          self.connection.write(bytes)
+          self.tick(self.connection)
+          return
+        else:
+          self.connection.closed()
+          self.tick(self.connection)
+      except:
+        self.connection.trace("err", traceback.format_exc().strip())
     selector.unregister(self)
     self.socket.close()
     self.socket = None
