@@ -74,6 +74,7 @@ class TxnTarget:
 
   def __init__(self, coordinator):
     self.coordinator = coordinator
+    self.live = set()
     self.dispatch = {Declare: self.declare, Discharge: self.discharge}
 
   def configure(self, dfn):
@@ -87,11 +88,15 @@ class TxnTarget:
     return self.dispatch[msg.content.__class__](xfr.state, msg)
 
   def declare(self, state, msg):
-    return Declared(buffer(self.coordinator.declare()))
+    txn = self.coordinator.declare()
+    self.live.add(txn)
+    return Declared(buffer(txn))
 
   def discharge(self, state, msg):
     try:
-      self.coordinator.discharge(msg.content.txn_id, msg.content.fail)
+      txn = msg.content.txn_id
+      self.coordinator.discharge(txn, msg.content.fail)
+      self.live.remove(txn)
       return ACCEPTED
     except KeyError:
       return Rejected(Error("amqp:transaction:unknown-id"))
@@ -100,10 +105,12 @@ class TxnTarget:
     return state
 
   def orphaned(self):
+    self.close()
     return True
 
   def close(self):
-    pass
+    while self.live:
+      self.coordinator.discharge(self.live.pop(), True)
 
   def durable(self):
     return False
