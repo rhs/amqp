@@ -27,6 +27,7 @@ class Entry:
   def __init__(self, queue, id, item):
     self.queue = queue
     self.id = id
+    self.tag = str(id)
     self.item = item
     self.next = None
     self.acquired = None
@@ -52,6 +53,9 @@ class Entry:
 
   def release(self):
     self.acquired = None
+    for s in self.queue.sources:
+      if self.id < s.next.id:
+        s.reset()
 
   def __del__(self):
     if self.item is not None:
@@ -71,6 +75,7 @@ class Queue:
     self.ring = ring
     self.acquire = acquire
     self.dequeue = dequeue
+    self.sources = []
 
   def identify(self):
     id = self.next_id
@@ -93,7 +98,9 @@ class Queue:
       self.head = self.head.next
 
   def source(self):
-    return Source(self.head, self.acquire, self.dequeue)
+    src = Source(self.head, self.acquire, self.dequeue)
+    self.sources.append(src)
+    return src
 
   def target(self):
     return Target(self)
@@ -128,14 +135,19 @@ class Source(Terminus):
 
   def __init__(self, next, acquire, dequeue):
     Terminus.__init__(self)
+    self.queue = next.queue
     self.next = next
     self.acquire = acquire
     self.dequeue = dequeue
     self.unacked = {}
 
+  def reset(self):
+    self.next = self.queue.head
+
   def get(self):
     while (self.next.next and
            (self.next.item is None or
+            self.next.tag in self.unacked or
             (self.acquire and self.next.acquire(self) != self))):
       self.next = self.next.next
 
@@ -147,10 +159,9 @@ class Source(Terminus):
     if self.acquire:
       assert entry.acquired == self
 
-    tag = str(entry.id)
-    self.unacked[tag] = entry
+    self.unacked[entry.tag] = entry
 
-    return tag, entry.item
+    return entry.tag, entry.item
 
   def resume(self, unsettled):
     for tag, state in unsettled.items():
@@ -178,6 +189,7 @@ class Source(Terminus):
     for tag in self.unacked.keys():
       # XXX: default outcome
       self.settle(tag, None)
+    self.queue.sources.remove(self)
 
 class Target(Terminus):
 
