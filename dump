@@ -1,0 +1,69 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import optparse, os, time
+from client import *
+
+parser = optparse.OptionParser(usage="usage: %prog [options] <address> [<content> ...]",
+                               description="send messages")
+parser.add_option("-H", "--host",
+                  help="host to connect to (default 0.0.0.0)")
+parser.add_option("-a", "--auth", action="store_true",
+                  help="enable sasl authentication layer")
+parser.add_option("-u", "--username", help="username to use for authentication")
+parser.add_option("-w", "--password", help="password to use for authentication")
+parser.add_option("-m", "--mechanism", default="ANONYMOUS",
+                  help="sasl mechanism to choose")
+parser.add_option("-p", "--port", type=int, default=5672,
+                  help="port to connect to (default %default)")
+parser.add_option("-t", "--trace", default="err",
+                  help="enable tracing for specified categories")
+
+opts, args = parser.parse_args()
+
+if not args:
+  parser.error("address is required")
+
+addr = args[0]
+
+host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
+conn = Connection(auth=opts.auth)
+conn.tracing(*opts.trace.split())
+conn.connect(host, opts.port)
+conn.open(mechanism=opts.mechanism.upper(), username=opts.username,
+          password=opts.password)
+ssn = conn.session()
+lnk = ssn.sender(addr)
+
+try:
+  lnk.send(settled=True, delivery_tag="dump")
+  while lnk.pending(True):
+    for t, l, r in lnk.pending():
+      print t, r.state
+      lnk.settle(t, r.state)
+except KeyboardInterrupt:
+  pass
+
+lnk.close()
+ssn.close()
+conn.close()
+
+for tag, local, remote in lnk.get_unsettled():
+  print "UNSETTLED:", tag, local, remote
