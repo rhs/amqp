@@ -120,6 +120,8 @@ class Terminus:
     return self._durable
 
   def orphaned(self):
+    if not self.durable():
+      self.close()
     return False
 
 class Source(Terminus):
