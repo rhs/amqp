@@ -98,13 +98,14 @@ class Queue:
   def target(self):
     return Target(self)
 
-  def __repr__(self):
-    entries = []
+  def entries(self):
     e = self.head
     while e is not None:
-      entries.append(e)
+      yield e
       e = e.next
-    return repr(entries)
+
+  def __repr__(self):
+    return repr(list(self.entries()))
 
 class Terminus:
 
@@ -187,16 +188,24 @@ class Target(Terminus):
     return self.queue.capacity()
 
   def put(self, tag, message, owner=None):
-    entry = self.queue.put(message)
-    entry.acquire(owner)
-    self.unsettled[tag] = entry
-    return ACCEPTED
+    if tag == "dump":
+      print "-------- DUMP START --------"
+      for e in self.queue.entries():
+        print e
+      print "-------- DUMP END   --------"
+    else:
+      entry = self.queue.put(message)
+      entry.acquire(owner)
+      self.unsettled[tag] = entry
+      return ACCEPTED
 #    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
     pass
 
   def settle(self, tag, state):
+    if tag == "dump":
+      return state
     entry = self.unsettled.pop(tag)
     if state is None:
       entry.remove()
