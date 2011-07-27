@@ -126,6 +126,12 @@ class ConnectionSelectable:
     # XXX: hardcoded buffer size
     try:
       bytes = self.socket.recv(64*1024)
+    except:
+      cls, exc, tb = sys.exc_info()
+      self.connection.trace("err", "".join(traceback.format_exception(cls, exc, tb)).strip())
+      self.connection.error(exc)
+      self.tick(self.connection)
+    else:
       if bytes:
         self.connection.write(bytes)
         self.tick(self.connection)
@@ -133,11 +139,6 @@ class ConnectionSelectable:
       else:
         self.connection.closed()
         self.tick(self.connection)
-    except:
-      cls, exc, tb = sys.exc_info()
-      self.connection.trace("err", "".join(traceback.format_exception(cls, exc, tb)).strip())
-      self.connection.error(exc)
-      self.tick(self.connection)
     selector.unregister(self)
     self.socket.close()
     self.socket = None
