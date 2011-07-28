@@ -133,8 +133,6 @@ class Broker:
 
     self.attach = {Sender.role: self.attach_sender,
                    Receiver.role: self.attach_receiver}
-    self.process = {Sender.role: self.process_sender,
-                    Receiver.role: self.process_receiver}
     self.detach = {Sender.role: self.detach_sender,
                    Receiver.role: self.detach_receiver}
     self.orphan = {Sender.role: self.orphan_sender,
@@ -221,6 +219,8 @@ class Broker:
           ssn.set_incoming_window(self.window)
 
       links = ssn.links.values()
+      senders = []
+      receivers = []
       for link in links:
         if link.attaching():
           if self.attach[link.role](link):
@@ -230,14 +230,21 @@ class Broker:
             link.modified = True
             link.attach()
             link.detach()
+        if link.role == Sender.role:
+          senders.append(link)
+        else:
+          receivers.append(link)
 
-      for link in links:
-        self.process[link.role](link)
+      for link in senders:
+        self.process_sender(link)
 
       while True:
         link = ssn.next_receiver()
         if link is None: break
         self.process_incoming(link)
+
+      for link in receivers:
+        self.process_receiver(link)
 
       for link in links:
         if link.detaching():
