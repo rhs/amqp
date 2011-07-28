@@ -81,11 +81,6 @@ class Connection(Dispatcher):
     if "max_frame_size" in kwargs:
       self.max_frame_size = min(self.max_frame_size, kwargs["max_frame_size"])
     open = Open(*args, **kwargs)
-    # XXX
-    if open.container_id is None:
-      open.container_id = self.container_id
-    else:
-      self.container_id = open.container_id
     self.post_frame(0, open)
     self.open_sent = True
 
