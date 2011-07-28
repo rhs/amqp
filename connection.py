@@ -34,6 +34,7 @@ class Connection(Dispatcher):
   def __init__(self, factory):
     Dispatcher.__init__(self, 0, AMQP_FRAME)
     self.factory = factory
+    self.container_id = None
 
     self.open_rcvd = False
     self.open_sent = False
@@ -79,13 +80,20 @@ class Connection(Dispatcher):
   def open(self, *args, **kwargs):
     if "max_frame_size" in kwargs:
       self.max_frame_size = min(self.max_frame_size, kwargs["max_frame_size"])
-    self.post_frame(0, Open(*args, **kwargs))
+    open = Open(*args, **kwargs)
+    # XXX
+    if open.container_id is None:
+      open.container_id = self.container_id
+    else:
+      self.container_id = open.container_id
+    self.post_frame(0, open)
     self.open_sent = True
 
   def do_open(self, channel, open):
     if self.open_rcvd:
       self.close(ConnectionError(error_code=501, description="double open"))
     else:
+      self.container_id = open.container_id
       self.open_rcvd = True
     self.max_frame_size = min(self.max_frame_size,
                               open.max_frame_size or self.max_frame_size)

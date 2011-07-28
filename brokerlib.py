@@ -223,7 +223,7 @@ class Broker:
       receivers = []
       for link in links:
         if link.attaching():
-          if self.attach[link.role](link):
+          if self.attach[link.role](link, connection):
             link.attach()
           else:
             # XXX
@@ -236,22 +236,22 @@ class Broker:
           receivers.append(link)
 
       for link in senders:
-        self.process_sender(link)
+        self.process_sender(link, connection)
 
       while True:
         link = ssn.next_receiver()
         if link is None: break
-        self.process_incoming(link)
+        self.process_incoming(link, connection)
 
       for link in receivers:
-        self.process_receiver(link)
+        self.process_receiver(link, connection)
 
       for link in links:
         if link.detaching():
-          self.detach[link.role](link)
+          self.detach[link.role](link, connection)
           link.detach()
         elif ssn.ending() or connection.closing() or connection.is_closed():
-          self.orphan[link.role](link)
+          self.orphan[link.role](link, connection)
 
         if link.detached():
           ssn.remove(link)
@@ -265,9 +265,10 @@ class Broker:
 
     connection.tick()
 
-  def attach_sender(self, link):
-    if link.name in self.sources:
-      source = self.sources[link.name]
+  def attach_sender(self, link, connection):
+    key = (connection.container_id, link.name)
+    if key in self.sources:
+      source = self.sources[key]
       source.resume(link.unsettled or {})
       # XXX: should actually set this to reflect the real source and
       # possibly update the real source
@@ -278,16 +279,17 @@ class Broker:
       n = self.resolve(link.remote_source)
       source = n.source()
       local_source = source.configure(link.remote_source)
-      self.sources[link.name] = source
+      self.sources[key] = source
       link.source = local_source
       link.target = link.remote_target
       return True
     else:
       return False
 
-  def attach_receiver(self, link):
-    if link.name in self.targets:
-      target = self.targets[link.name]
+  def attach_receiver(self, link, connection):
+    key = (connection.container_id, link.name)
+    if key in self.targets:
+      target = self.targets[key]
       target.resume(link.unsettled or {})
       link.source = link.remote_source
       # XXX: should actually set this to reflect the real target and
@@ -301,7 +303,7 @@ class Broker:
       else:
         target = n.target()
         local_target = target.configure(link.remote_target)
-        self.targets[link.name] = target
+        self.targets[key] = target
         if target.capacity():
           link.flow(20)
         link.source = link.remote_source
@@ -323,9 +325,10 @@ class Broker:
   def resolve_coordinator(self, target):
     return self.coordinator
 
-  def process_sender(self, link):
+  def process_sender(self, link, connection):
     if link.source is None: return
-    source = self.sources[link.name]
+    key = (connection.container_id, link.name)
+    source = self.sources[key]
     while link.capacity() > 0:
       tag, xfr = source.get()
       if xfr is None:
@@ -343,8 +346,6 @@ class Broker:
           link.settle(t, state)
         def undo(t=t):
           pass
-#          state = source.settle(t, None)
-#          link.settle(t, state)
         if r.state:
           txn = self.coordinator.get_transaction(r.state)
         else:
@@ -355,8 +356,9 @@ class Broker:
           doit()
       r.modified = False
 
-  def process_incoming(self, link):
-    target = self.targets[link.name]
+  def process_incoming(self, link, connection):
+    key = (connection.container_id, link.name)
+    target = self.targets[key]
     xfr = link.get()
     if not isinstance(target, TxnTarget):
       if xfr.state:
@@ -382,9 +384,10 @@ class Broker:
       if link.rcv_settle_mode == 0:
         link.settle(xfr.delivery_tag)
 
-  def process_receiver(self, link):
+  def process_receiver(self, link, connection):
     if link.target is None: return
-    target = self.targets[link.name]
+    key = (connection.container_id, link.name)
+    target = self.targets[key]
 
     for t, l, r in link.get_remote():
       if r.settled and not isinstance(l.state, TransactionalState):
@@ -393,30 +396,34 @@ class Broker:
 
     if target.capacity() and link.credit() < 10: link.flow(10)
 
-  def orphan_sender(self, link):
-    source = self.sources[link.name]
+  def orphan_sender(self, link, connection):
+    key = (connection.container_id, link.name)
+    source = self.sources[key]
     if source.orphaned():
-      del self.sources[link.name]
+      del self.sources[key]
 
-  def orphan_receiver(self, link):
-    target = self.targets[link.name]
+  def orphan_receiver(self, link, connection):
+    key = (connection.container_id, link.name)
+    target = self.targets[key]
     if target.orphaned():
-      del self.targets[link.name]
+      del self.targets[key]
 
-  def detach_sender(self, link):
+  def detach_sender(self, link, connection):
     if link.source:
-      source = self.sources[link.name]
+      key = (connection.container_id, link.name)
+      source = self.sources[key]
       if link.remote_source is None or not source.durable():
-        del self.sources[link.name]
+        del self.sources[key]
         source.close()
         link.source = link.remote_source
         link.target = link.remote_target
 
-  def detach_receiver(self, link):
+  def detach_receiver(self, link, connection):
+    key = (connection.container_id, link.name)
     if link.target:
-      target = self.targets[link.name]
+      target = self.targets[key]
       if link.remote_target is None or not target.durable():
-        del self.targets[link.name]
+        del self.targets[key]
         target.close()
         link.source = link.remote_source
         link.target = link.remote_target
