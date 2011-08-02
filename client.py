@@ -159,12 +159,15 @@ class Session:
     if snd.proto.remote_target is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
+    else:
+      snd.address = snd.proto.remote_target.address
     return snd
 
   @synchronized
   def receiver(self, source, limit=0, drain=False, name=None):
-    rcv = Receiver(self.connection, name or str(uuid4()),
-                   Source(address=source))
+    if isinstance(source, basestring):
+      source = Source(address=source)
+    rcv = Receiver(self.connection, name or str(uuid4()), source)
     self.proto.add(rcv.proto)
     if limit:
       rcv.flow(limit, drain=drain)
@@ -173,6 +176,8 @@ class Session:
     if rcv.proto.remote_source is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
+    else:
+      rcv.address = rcv.proto.remote_source.address
     return rcv
 
   @synchronized
@@ -219,6 +224,7 @@ class Link:
     self.connection = connection
     self._lock = self.connection._lock
     self.timeout = 120
+    self.address = None
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:

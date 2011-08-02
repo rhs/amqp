@@ -38,6 +38,8 @@ parser.add_option("-f", "--frame-size", type=int, default=4294967295,
 parser.add_option("-l", "--link", help="link name")
 parser.add_option("-d", "--detach", action="store_true",
                   help="detach rather than close link")
+parser.add_option("-D", "--dynamic", action="store_true",
+                  help="set dynamic flag on terminus")
 parser.add_option("-b", "--block", action="store_true",
                   help="block until messages arrive")
 parser.add_option("-c", "--count", type=int, default=1,
@@ -52,10 +54,12 @@ parser.add_option("-r", "--rollback", action="store_true")
 
 opts, args = parser.parse_args()
 
-if not args:
+if opts.dynamic:
+  addr = Source(dynamic=True)
+elif not args:
   parser.error("address is required")
-
-addr = args[0]
+else:
+  addr = args[0]
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection(auth=opts.auth)
@@ -69,6 +73,9 @@ if opts.count:
 else:
   credit = 10
 lnk = ssn.receiver(addr, limit=credit, drain=not opts.block, name=opts.link)
+
+if opts.dynamic:
+  print lnk.address
 
 count = 0
 try:

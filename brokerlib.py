@@ -27,6 +27,7 @@ from util import ConnectionSelectable
 from protocol import Source, Target, Coordinator, Declare, Declared, Discharge, \
     TransactionalState, ACCEPTED
 from messaging import decode
+from queue import Queue
 
 class Transaction:
 
@@ -130,6 +131,7 @@ class Broker:
     self.nodes = {}
     self.sources = {}
     self.targets = {}
+    self.dynamic_counter = 0
 
     self.attach = {Sender.role: self.attach_sender,
                    Receiver.role: self.attach_receiver}
@@ -275,16 +277,17 @@ class Broker:
       link.source = link.remote_source
       link.target = link.remote_target
       return True
-    elif link.remote_source.address in self.nodes:
-      n = self.resolve(link.remote_source)
-      source = n.source()
-      local_source = source.configure(link.remote_source)
-      self.sources[key] = source
-      link.source = local_source
-      link.target = link.remote_target
-      return True
     else:
-      return False
+      n = self.resolve(link.remote_source)
+      if n is None:
+        return False
+      else:
+        source = n.source()
+        local_source = source.configure(link.remote_source)
+        self.sources[key] = source
+        link.source = local_source
+        link.target = link.remote_target
+        return True
 
   def attach_receiver(self, link, connection):
     key = (connection.container_id, link.name)
@@ -320,7 +323,15 @@ class Broker:
     return self.resolve_terminus(source)
 
   def resolve_terminus(self, terminus):
-    return self.nodes.get(terminus.address)
+    t = self.nodes.get(terminus.address)
+    if not t and terminus.dynamic:
+      t = Queue()
+      name = "dynamic-%s" % self.dynamic_counter
+      self.dynamic_counter += 1
+      self.nodes[name] = t
+      # XXX: need to formalize the mutability of the argument
+      terminus.address = name
+    return t
 
   def resolve_coordinator(self, target):
     return self.coordinator
