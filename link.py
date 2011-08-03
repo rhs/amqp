@@ -213,20 +213,19 @@ class Link(object):
     states = {}
 
     for dtag, local, remote in self.get_local(modified=True):
-      if remote.settled:
-        continue
-      id = role.aliases[(self, dtag)]
-      if local in states:
-        ranges = states[local]
-      else:
-        ranges = RangeSet()
-        states[local] = ranges
-      ranges.add(id)
+      if not remote.settled:
+        id = role.aliases[(self, dtag)]
+        if local in states:
+          ranges = states[local]
+        else:
+          ranges = RangeSet()
+          states[local] = ranges
+        ranges.add(id)
+        local.modified = False
 
       if local.settled:
         role.settle(self, dtag)
         self.unsettled.pop(dtag)
-      local.modified = False
 
     for local, ranges in states.items():
       for r in ranges:

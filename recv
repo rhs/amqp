@@ -103,6 +103,10 @@ try:
       if credit:
         lnk.flow(credit, drain=not opts.block)
 
+    # XXX
+    for tag, _, _ in lnk.get_remote(settled=True):
+      lnk.settle(tag)
+
   if opts.txn:
     ssn.discharge(txn, fail=opts.rollback)
 except KeyboardInterrupt:
@@ -114,10 +118,6 @@ else:
   lnk.close()
 ssn.close()
 conn.close()
-
-# XXX
-for tag, _, _ in lnk.get_remote(settled=True):
-  lnk.settle(tag)
 
 for tag, local, remote in lnk.get_unsettled():
   print "UNSETTLED:", tag, local, remote
