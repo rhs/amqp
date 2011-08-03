@@ -58,7 +58,7 @@ class Source(Terminus):
   def close(self):
     pass
 
-class Target:
+class Target(Terminus):
 
   def __init__(self, hole):
     Terminus.__init__(self)
