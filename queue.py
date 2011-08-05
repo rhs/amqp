@@ -212,11 +212,11 @@ class Target(Terminus):
       for e in self.queue.entries():
         print e
       print "-------- DUMP END   --------"
-    else:
+    elif tag not in self.unsettled:
       entry = self.queue.put(message)
       entry.acquire(owner)
       self.unsettled[tag] = entry
-      return ACCEPTED
+    return ACCEPTED
 #    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
