@@ -291,7 +291,9 @@ class Sender(Link):
     self.link_credit -= 1
 
     if delivery_tag in self.unsettled:
-      kwargs["resume"] = True
+      local, remote = self.unsettled[delivery_tag]
+      if remote.state is not None:
+        kwargs["resume"] = True
 
     xfrs = self.fragment(**kwargs)
 
@@ -301,7 +303,7 @@ class Sender(Link):
 
     if settled:
       self.session.outgoing.settle(self, delivery_tag)
-    else:
+    elif delivery_tag not in self.unsettled:
       self.unsettled[delivery_tag] = (State(), State(state))
 
     return delivery_tag
