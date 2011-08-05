@@ -99,7 +99,7 @@ class Connection:
 
   @synchronized
   def open(self, **kwargs):
-    if "container_id" not in kwargs:
+    if not kwargs.get("container_id"):
       kwargs["container_id"] = str(uuid4())
     if "channel_max" not in kwargs:
       kwargs["channel_max"] = 65535

@@ -122,11 +122,15 @@ class Link(object):
       raise LinkError("already attached")
     self.handle = self.session.allocate_handle()
     self.attach_sent = True
+    unsettled = {}
+    for tag, local, remote in self.get_local(settled=False):
+      unsettled[tag] = local.state
     self.post_frame(Attach(name = self.name,
                            role = self.role,
                            source = self.source,
                            target = self.target,
-                           initial_delivery_count = self.delivery_count))
+                           initial_delivery_count = self.delivery_count,
+                           unsettled = unsettled))
     if self.role == Receiver.role:
       self.post_frame(self._flow())
 
@@ -138,6 +142,14 @@ class Link(object):
     self.remote_target = attach.target
     self.snd_settle_mode = attach.snd_settle_mode
     self.rcv_settle_mode = attach.rcv_settle_mode
+    if attach.unsettled:
+      for tag, state in attach.unsettled.items():
+        if tag in self.unsettled:
+          local, remote = self.unsettled[tag]
+          remote.state = state
+          remote.modified = True
+        else:
+          self.unsettled[tag] = State(), State(state)
 
   # XXX: closing and errors
   def detach(self, closed=False):
@@ -182,6 +194,15 @@ class Link(object):
 
   def get_remote(self, settled=None, modified=None):
     return [(t, l, r) for t, l, r in self._query(1, settled, modified) if not l.settled]
+
+  def remote_unsettled(self):
+    unsettled = {}
+    for tag, local, remote in self.get_remote(settled=False):
+      unsettled[tag] = remote.state
+    return unsettled
+
+  def resume(self, delivery_tag, local):
+    self.unsettled[delivery_tag] = (State(local), State())
 
   def disposition(self, delivery_tag, state=None, settled=False):
     local, remote = self.unsettled[delivery_tag]
@@ -269,7 +290,11 @@ class Sender(Link):
     self.delivery_count += 1
     self.link_credit -= 1
 
+    if delivery_tag in self.unsettled:
+      kwargs["resume"] = True
+
     xfrs = self.fragment(**kwargs)
+
     for xfr in xfrs:
       self.session.outgoing.append(self, xfr)
       self.post_frame(xfr)

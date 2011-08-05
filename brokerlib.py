@@ -271,7 +271,9 @@ class Broker:
     key = (connection.container_id, link.name)
     if key in self.sources:
       source = self.sources[key]
-      source.resume(link.unsettled or {})
+      for tag, local in source.resuming():
+        link.resume(tag, local)
+      source.resume(link.remote_unsettled())
       # XXX: should actually set this to reflect the real source and
       # possibly update the real source
       link.source = link.remote_source
@@ -293,7 +295,9 @@ class Broker:
     key = (connection.container_id, link.name)
     if key in self.targets:
       target = self.targets[key]
-      target.resume(link.unsettled or {})
+      for tag, local in target.resuming():
+        link.resume(tag, local)
+      target.resume(link.remote_unsettled())
       link.source = link.remote_source
       # XXX: should actually set this to reflect the real target and
       # possibly update the real target

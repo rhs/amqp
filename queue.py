@@ -127,9 +127,11 @@ class Terminus:
     return self._durable
 
   def orphaned(self):
-    if not self.durable():
+    if self.durable():
+      return False
+    else:
       self.close()
-    return False
+      return True
 
 class Source(Terminus):
 
@@ -172,7 +174,11 @@ class Source(Terminus):
         oldest = entry
 #    print "RESUME: %s -> %s" % (self.next.id, oldest.id)
     self.next = oldest
-    # XXX: clear unacked?
+    self.unacked.clear()
+
+  def resuming(self):
+    for tag, entry in self.unacked.items():
+      yield tag, None
 
   def settle(self, tag, state):
     entry = self.unacked.pop(tag)
@@ -215,7 +221,13 @@ class Target(Terminus):
 #    print "ENQUEUED:", tag, message.fragments
 
   def resume(self, unsettled):
-    pass
+    for tag, entry in self.resuming():
+      if tag not in unsettled:
+        self.settle(tag, None)
+
+  def resuming(self):
+    for tag, entry in self.unsettled.items():
+      yield tag, ACCEPTED
 
   def settle(self, tag, state):
     if tag == "dump":

@@ -51,6 +51,10 @@ parser.add_option("-t", "--trace", default="err",
 parser.add_option("-x", "--txn", action="store_true",
                   help="send transactionally")
 parser.add_option("-r", "--rollback", action="store_true")
+parser.add_option("-C", "--container", type=str,
+                  help="specify the container-id")
+parser.add_option("-e", "--durable", action="store_true",
+                  help="specify terminus is dUrable")
 
 opts, args = parser.parse_args()
 
@@ -59,14 +63,15 @@ if opts.dynamic:
 elif not args:
   parser.error("address is required")
 else:
-  addr = args[0]
+  addr = Source(address=args[0], durable=opts.durable)
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection(auth=opts.auth)
 conn.tracing(*opts.trace.split())
 conn.connect(host, opts.port)
 conn.open(mechanism=opts.mechanism.upper(), username=opts.username,
-          password=opts.password, max_frame_size=opts.frame_size)
+          password=opts.password, max_frame_size=opts.frame_size,
+          container_id=opts.container)
 ssn = conn.session()
 if opts.count:
   credit = min(10, opts.count)
@@ -118,6 +123,10 @@ else:
   lnk.close()
 ssn.close()
 conn.close()
+
+# XXX
+for tag, _, _ in lnk.get_remote(settled=True):
+  lnk.settle(tag)
 
 for tag, local, remote in lnk.get_unsettled():
   print "UNSETTLED:", tag, local, remote
