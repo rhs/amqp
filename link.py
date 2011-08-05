@@ -124,7 +124,7 @@ class Link(object):
     self.attach_sent = True
     unsettled = {}
     for tag, local, remote in self.get_local(settled=False):
-      unsettled[tag] = local.state
+      unsettled[buffer(tag)] = local.state
     self.post_frame(Attach(name = self.name,
                            role = self.role,
                            source = self.source,
