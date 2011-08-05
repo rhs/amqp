@@ -166,15 +166,14 @@ class Source(Terminus):
     return entry.tag, entry.item
 
   def resume(self, unsettled):
-    for tag, state in unsettled.items():
-      self.settle(tag, state)
     oldest = self.next
     for entry in self.unacked.values():
       if entry.id < oldest.id:
         oldest = entry
+      if entry.tag not in unsettled:
+        self.settle(entry.tag, None)
 #    print "RESUME: %s -> %s" % (self.next.id, oldest.id)
     self.next = oldest
-    self.unacked.clear()
 
   def resuming(self):
     for tag, entry in self.unacked.items():

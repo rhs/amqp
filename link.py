@@ -198,7 +198,8 @@ class Link(object):
   def remote_unsettled(self):
     unsettled = {}
     for tag, local, remote in self.get_remote(settled=False):
-      unsettled[tag] = remote.state
+      if remote.state is not None:
+        unsettled[tag] = remote.state
     return unsettled
 
   def resume(self, delivery_tag, local):
