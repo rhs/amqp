@@ -222,7 +222,7 @@ class Target(Terminus):
   def resume(self, unsettled):
     for tag, entry in self.resuming():
       if tag not in unsettled:
-        self.settle(tag, None)
+        self.settle(tag, ACCEPTED)
 
   def resuming(self):
     for tag, entry in self.unsettled.items():
