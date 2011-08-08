@@ -31,7 +31,7 @@ from concurrency import synchronized, Condition, Waiter
 from threading import RLock
 from uuid import uuid4
 from protocol import Source, Target, ACCEPTED, Accepted, Coordinator, Declare, \
-    Discharge, TransactionalState
+    Discharge, TransactionalState, Binary
 
 class Timeout(Exception):
   pass
@@ -160,7 +160,7 @@ class Session:
       snd.close()
       raise LinkError("no such target: %s" % target)
     else:
-      snd.address = snd.proto.remote_target.address
+      snd.address = getattr(snd.proto.remote_target, "address", None)
     return snd
 
   @synchronized
@@ -177,7 +177,7 @@ class Session:
       rcv.close()
       raise LinkError("no such source: %s" % source)
     else:
-      rcv.address = rcv.proto.remote_source.address
+      rcv.address = getattr(rcv.proto.remote_source, "address", None)
     return rcv
 
   @synchronized
@@ -294,7 +294,7 @@ class Sender(Link):
       if delivery_tag is None:
         delivery_tag = message.delivery_tag
     if txn is not None:
-      kwargs["state"] = TransactionalState(buffer(txn))
+      kwargs["state"] = TransactionalState(Binary(txn))
     return self.proto.send(delivery_tag=delivery_tag, **kwargs)
 
 class Receiver(Link):

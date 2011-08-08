@@ -18,7 +18,7 @@
 #
 
 from codec import TYPES as TYPES_DOC, TypeDecoder, TypeEncoder, Symbol, \
-    Described, Primitive
+    Described, Primitive, Binary
 from composite import Composite, Restricted, load_composite, Field
 from util import load_xml, pythonize
 
@@ -59,7 +59,8 @@ for cls in CLASSES:
   for d in cls.DESCRIPTORS:
     PROTOCOL_DECODER.constructors[d] = cls.construct
 
-__all__ = ["CLASSES", "PROTOCOL_DECODER", "PROTOCOL_ENCODER"]
+__all__ = ["CLASSES", "PROTOCOL_DECODER", "PROTOCOL_ENCODER", "Symbol",
+           "Binary"]
 
 for cls in CLASSES:
   globals()[cls.__name__] = cls

@@ -25,7 +25,7 @@ from session import Session, SessionError, FIXED
 from link import LinkError, Receiver, Sender, link
 from util import ConnectionSelectable
 from protocol import Source, Target, Coordinator, Declare, Declared, Discharge, \
-    TransactionalState, ACCEPTED
+    TransactionalState, ACCEPTED, Binary
 from messaging import decode
 from queue import Queue
 
@@ -91,7 +91,7 @@ class TxnTarget:
   def declare(self, state, msg):
     txn = self.coordinator.declare()
     self.live.add(txn)
-    return Declared(buffer(txn))
+    return Declared(Binary(txn))
 
   def discharge(self, state, msg):
     try:

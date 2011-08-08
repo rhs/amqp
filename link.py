@@ -17,7 +17,7 @@
 # under the License.
 #
 
-from protocol import Attach, Flow, Transfer, Disposition, Detach
+from protocol import Attach, Flow, Transfer, Disposition, Detach, Binary
 from util import Constant, RangeSet
 from uuid import uuid4
 
@@ -124,7 +124,7 @@ class Link(object):
     self.attach_sent = True
     unsettled = {}
     for tag, local, remote in self.get_local(settled=False):
-      unsettled[buffer(tag)] = local.state
+      unsettled[Binary(tag)] = local.state
     self.post_frame(Attach(name = self.name,
                            role = self.role,
                            source = self.source,

@@ -110,6 +110,20 @@ class Symbol:
   def __repr__(self):
     return "Symbol(%r)" % self.name
 
+class Binary:
+
+  def __init__(self, bytes):
+    self.bytes = bytes
+
+  def __hash__(self):
+    return hash(self.bytes)
+
+  def __eq__(self, o):
+    return isinstance(o, Binary) and self.bytes == o.bytes or self.bytes == o
+
+  def __repr__(self):
+    return "Binary(%r)" % self.bytes
+
 # XXX: sym instead of Symbol?
 
 class Encoding:
@@ -178,7 +192,7 @@ class TypeEncoder:
       # blurring beween string and binary data
       str: Primitive("string"),
       Symbol: Primitive("symbol"),
-      buffer: Primitive("binary"),
+      Binary: Primitive("binary"),
       uuid.UUID: Primitive("uuid"),
       None.__class__: Primitive("null")
       }
@@ -279,8 +293,8 @@ class TypeEncoder:
     return struct.pack("!16s", u.bytes)
 
   def enc_binary(self, b):
-    if isinstance(b, buffer):
-      b = str(b)
+    if isinstance(b, Binary):
+      b = b.bytes
     return struct.pack("!I", len(b)) + b
 
   def enc_string(self, s):
