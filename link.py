@@ -149,7 +149,7 @@ class Link(object):
           remote.state = state
           remote.modified = True
         else:
-          self.unsettled[tag] = State(), State(state)
+          self.unsettled[tag] = State(), State(state, modified=True)
 
   # XXX: closing and errors
   def detach(self, closed=False):
@@ -197,9 +197,8 @@ class Link(object):
 
   def remote_unsettled(self):
     unsettled = {}
-    for tag, local, remote in self.get_remote(settled=False):
-      if remote.state is not None:
-        unsettled[tag] = remote.state
+    for tag, local, remote in self.get_remote(modified=True):
+      unsettled[tag] = remote.state
     return unsettled
 
   def resume(self, delivery_tag, local):
@@ -355,7 +354,13 @@ class Receiver(Link):
       self.payloads = []
       xfr.payload = payload
       self.incoming.append(xfr)
-      self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled))
+      if xfr.delivery_tag in self.unsettled:
+        local, remote = self.unsettled[xfr.delivery_tag]
+        if xfr.state:
+          remote.state = xfr.state
+        remote.modified = True
+      else:
+        self.unsettled[xfr.delivery_tag] = (State(), State(xfr.state, xfr.settled, modified=True))
       self.link_credit -= 1
       self.delivery_count += 1
       self.available = max(0, self.available - 1)

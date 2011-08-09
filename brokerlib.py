@@ -238,15 +238,18 @@ class Broker:
           receivers.append(link)
 
       for link in senders:
-        self.process_sender(link, connection)
+        if link.attached():
+          self.process_sender(link, connection)
 
       while True:
         link = ssn.next_receiver()
         if link is None: break
-        self.process_incoming(link, connection)
+        if link.attached():
+          self.process_incoming(link, connection)
 
       for link in receivers:
-        self.process_receiver(link, connection)
+        if link.attached():
+          self.process_receiver(link, connection)
 
       for link in links:
         if link.detaching():
