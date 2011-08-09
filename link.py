@@ -201,8 +201,13 @@ class Link(object):
       unsettled[tag] = remote.state
     return unsettled
 
-  def resume(self, delivery_tag, local):
-    self.unsettled[delivery_tag] = (State(local), State())
+  def resume(self, delivery_tag, state):
+    if delivery_tag in self.unsettled:
+      local, remote = self.unsettled[delivery_tag]
+      local.state = state
+      local.modified = True
+    else:
+      self.unsettled[delivery_tag] = (State(state), State())
 
   def disposition(self, delivery_tag, state=None, settled=False):
     local, remote = self.unsettled[delivery_tag]
@@ -235,13 +240,14 @@ class Link(object):
 
     for dtag, local, remote in self.get_local(modified=True):
       if not remote.settled:
-        id = role.aliases[(self, dtag)]
-        if local in states:
-          ranges = states[local]
-        else:
-          ranges = RangeSet()
-          states[local] = ranges
-        ranges.add(id)
+        id = role.aliases.get((self, dtag))
+        if id is not None:
+          if local in states:
+            ranges = states[local]
+          else:
+            ranges = RangeSet()
+            states[local] = ranges
+          ranges.add(id)
         local.modified = False
 
       if local.settled:
