@@ -30,6 +30,7 @@ class Message:
     self.header = Header()
     self.annotations = None
     self.properties = Properties()
+    self.application_properties = kwargs.pop("properties", None)
     self.content = content
     self.footer = Footer({})
     for k, v in kwargs.items():
@@ -37,16 +38,32 @@ class Message:
         if hasattr(o, k):
           setattr(o, k, v)
 
+  def __getitem__(self, key):
+    if self.application_properties:
+      return self.application_properties[key]
+    else:
+      raise KeyError(key)
+
+  def __setitem__(self, key, value):
+    if not self.application_properties:
+      self.application_properties = {}
+    self.application_properties[key] = value
+
   def __repr__(self):
     args = []
-    for f in ["delivery_tag"] + [f.name for f in Header.FIELDS] + \
+    for f in ["delivery_tag", ("application_properties", "properties")] + \
+          [f.name for f in Header.FIELDS] + \
           [f.name for f in Properties.FIELDS] + ["content"] + \
           [f.name for f in Footer.FIELDS]:
+      if isinstance(f, tuple):
+        f, a = f
+      else:
+        f, a = f, f
       for o in (self, self.header, self.properties, self.footer):
         if hasattr(o, f):
           v = getattr(o, f)
           if v is not None:
-            args.append("%s=%r" % (f, v))
+            args.append("%s=%r" % (a, v))
     return "Message(%s)" % ", ".join(args)
 
 # XXX: encode: message -> str, decode: transfer -> message
@@ -58,6 +75,8 @@ def encode(message):
     encoded += encoder.encode(message.header)
   if message.properties:
     encoded += encoder.encode(message.properties)
+  if message.application_properties:
+    encoded += encoder.encode(ApplicationProperties(message.application_properties))
   if message.content is not None:
     # XXX: should dispatch
     if isinstance(message.content, str):
@@ -80,9 +99,8 @@ def process_delivery_annotations(msg, ann):
   print "warning, ignoring delivery annotations", ann
 def process_message_annotations(msg, ann):
   msg.annotations = ann
-def process_application_properties(msg, props):
-  # XXX: we don't do anything with this yet
-  print "warning, ignoring app properties", props
+def process_application_properties(msg, ap):
+  msg.application_properties = ap.value
 def process_data(msg, v):
   if msg.content is None:
     msg.content = v.value
