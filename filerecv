@@ -66,6 +66,15 @@ dir = args[1]
 def path(f):
   return os.path.join(dir, f)
 
+def HEX(tag):
+  return "".join(["%02x" % ord(c) for c in tag])
+def BIN(tag):
+  result = ""
+  while tag:
+    result += chr(int(tag[:2], 16))
+    tag = tag[2:]
+  return result
+
 files = [f for f in os.listdir(dir) if os.path.isfile(path(f))]
 
 unsettled = {}
@@ -73,7 +82,7 @@ bytag = {}
 for f in files:
   if f.endswith(SFX):
     name, tag = f.split(":")
-    tag = tag[:-len(SFX)]
+    tag = BIN(tag[:-len(SFX)])
     unsettled[tag] = ACCEPTED
     bytag[tag] = os.path.join(dir, f), name
 
@@ -102,7 +111,8 @@ while lnk.pending(block=True):
   filename = msg["filename"]
   print "RECEIVED", filename
   sys.stdout.flush()
-  tmpname = os.path.join(dir, "%s:%s%s" % (filename, msg.delivery_tag, SFX))
+  tmpname = os.path.join(dir, "%s:%s%s" % (filename, HEX(msg.delivery_tag),
+                                           SFX))
   f = open(tmpname, "write")
   f.write(msg.content)
   f.close()
