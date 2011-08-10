@@ -108,15 +108,16 @@ for tag in unsettled.keys():
 
 while lnk.pending(block=True):
   msg = lnk.get()
-  filename = msg["filename"]
-  print "RECEIVED", filename
-  sys.stdout.flush()
-  tmpname = os.path.join(dir, "%s:%s%s" % (filename, HEX(msg.delivery_tag),
-                                           SFX))
-  f = open(tmpname, "write")
-  f.write(msg.content)
-  f.close()
-  bytag[msg.delivery_tag] = tmpname, filename
+  if msg.delivery_tag not in unsettled:
+    filename = msg["filename"]
+    print "RECEIVED", filename
+    sys.stdout.flush()
+    tmpname = os.path.join(dir, "%s:%s%s" % (filename, HEX(msg.delivery_tag),
+                                             SFX))
+    f = open(tmpname, "write")
+    f.write(msg.content)
+    f.close()
+    bytag[msg.delivery_tag] = tmpname, filename
   lnk.disposition(msg.delivery_tag, ACCEPTED)
   settle()
 
