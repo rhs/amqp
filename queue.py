@@ -17,6 +17,7 @@
 # under the License.
 #
 
+import sys
 from protocol import ACCEPTED
 from util import Constant
 
@@ -208,10 +209,10 @@ class Target(Terminus):
 
   def put(self, tag, message, owner=None):
     if tag == "dump":
-      print "-------- DUMP START --------"
+      print >> sys.stderr, "-------- DUMP START --------"
       for e in self.queue.entries():
-        print e
-      print "-------- DUMP END   --------"
+        print >> sys.stderr, e
+      print >> sys.stderr, "-------- DUMP END   --------"
     elif tag not in self.unsettled:
       entry = self.queue.put(message)
       entry.acquire(owner)
