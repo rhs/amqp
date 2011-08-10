@@ -108,7 +108,9 @@ for tag in unsettled.keys():
 
 while lnk.pending(block=True):
   msg = lnk.get()
-  if msg.delivery_tag not in unsettled:
+  if msg.delivery_tag in unsettled:
+    lnk.flow(1)
+  else:
     filename = msg["filename"]
     print "RECEIVED", filename
     sys.stdout.flush()
