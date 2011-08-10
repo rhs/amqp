@@ -1,0 +1,120 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import optparse, os, sys, time
+from client import *
+
+parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
+                               description="receive messages")
+parser.add_option("-H", "--host",
+                  help="host to connect to (default 0.0.0.0)")
+parser.add_option("-a", "--auth", action="store_true",
+                  help="enable sasl authentication layer")
+parser.add_option("-u", "--username", help="username to use for authentication")
+parser.add_option("-w", "--password", help="password to use for authentication")
+parser.add_option("-m", "--mechanism", default="ANONYMOUS",
+                  help="sasl mechanism to choose")
+parser.add_option("-p", "--port", type=int, default=5672,
+                  help="port to connect to (default %default)")
+parser.add_option("-f", "--frame-size", type=int, default=4294967295,
+                  help="specify the maximum frame size")
+parser.add_option("-l", "--link", help="link name")
+parser.add_option("-t", "--trace", default="err",
+                  help="enable tracing for specified categories")
+parser.add_option("-c", "--count", type=int, default=0,
+                  help="number of messages to receive (default %default)")
+parser.add_option("-C", "--container", type=str,
+                  default="%s.filesend" % socket.gethostname(),
+                  help="specify the container-id")
+
+opts, args = parser.parse_args()
+
+if len(args) != 2:
+  parser.error("address and out dir is required")
+
+addr = Source(address=args[0], durable=True)
+host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
+conn = Connection(auth=opts.auth)
+conn.tracing(*opts.trace.split())
+conn.connect(host, opts.port)
+conn.open(mechanism=opts.mechanism.upper(), username=opts.username,
+          password=opts.password, max_frame_size=opts.frame_size,
+          container_id=opts.container)
+ssn = conn.session()
+
+SFX = ".receiving"
+
+dir = args[1]
+
+def path(f):
+  return os.path.join(dir, f)
+
+files = [f for f in os.listdir(dir) if os.path.isfile(path(f))]
+
+unsettled = {}
+bytag = {}
+for f in files:
+  if f.endswith(SFX):
+    name, tag = f.split(":")
+    tag = tag[:-len(SFX)]
+    unsettled[tag] = ACCEPTED
+    bytag[tag] = os.path.join(dir, f), name
+
+lnk = ssn.receiver(addr, limit=(opts.count - len(files)), name=opts.link or dir,
+                   unsettled=unsettled)
+
+def settle_tag(t):
+  tmpname, filename = bytag[t]
+  target = os.path.join(dir, filename)
+  if os.path.exists(target):
+    raise Exception("DUPLICATE: %s" % filename)
+  os.rename(tmpname, target)
+  lnk.settle(t)
+  print "SETTLED", filename
+
+def settle():
+  for tag, _, _ in lnk.get_remote(settled=True):
+    settle_tag(tag)
+
+for tag in unsettled.keys():
+  if tag not in lnk.unsettled:
+    settle_tag(tag)
+
+while lnk.pending(block=True):
+  msg = lnk.get()
+  filename = msg["filename"]
+  print "RECEIVED", filename
+  sys.stdout.flush()
+  tmpname = os.path.join(dir, "%s:%s%s" % (filename, msg.delivery_tag, SFX))
+  f = open(tmpname, "write")
+  f.write(msg.content)
+  f.close()
+  bytag[msg.delivery_tag] = tmpname, filename
+  lnk.disposition(msg.delivery_tag, ACCEPTED)
+  settle()
+
+lnk.close()
+ssn.close()
+conn.close()
+
+settle()
+
+for tag, local, remote in lnk.get_unsettled():
+  print "UNSETTLED:", tag, local, remote
