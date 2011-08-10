@@ -63,7 +63,11 @@ if opts.dynamic:
 elif not args:
   parser.error("address is required")
 else:
-  addr = Target(address=args[0], durable=opts.durable)
+  if opts.durable:
+    durable = 2
+  else:
+    durable = 0
+  addr = Target(address=args[0], durable=durable)
 
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection(auth=opts.auth)

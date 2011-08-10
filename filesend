@@ -47,7 +47,7 @@ opts, args = parser.parse_args()
 if len(args) != 2:
   parser.error("address and send dir is required")
 
-addr = Target(address=args[0], durable=True)
+addr = Target(address=args[0], durable=2)
 host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
 conn = Connection(auth=opts.auth)
 conn.tracing(*opts.trace.split())
