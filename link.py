@@ -26,10 +26,11 @@ class LinkError(Exception):
 
 class State:
 
-  def __init__(self, state=None, settled=False, modified=False):
+  def __init__(self, state=None, settled=False, modified=False, resumed=False):
     self.state = state
     self.settled = settled
     self.modified = modified
+    self.resumed = resumed
 
   def __hash__(self):
     return hash(self.state) ^ hash(self.settled)
@@ -124,7 +125,8 @@ class Link(object):
     self.attach_sent = True
     unsettled = {}
     for tag, local, remote in self.get_local(settled=False):
-      unsettled[Binary(tag)] = local.state
+      if not local.resumed:
+        unsettled[Binary(tag)] = local.state
     self.post_frame(Attach(name = self.name,
                            role = self.role,
                            source = self.source,
@@ -149,7 +151,7 @@ class Link(object):
           remote.state = state
           remote.modified = True
         else:
-          self.unsettled[tag] = State(), State(state, modified=True)
+          self.unsettled[tag] = State(resumed=True), State(state, modified=True)
 
   # XXX: closing and errors
   def detach(self, closed=False):
@@ -206,6 +208,7 @@ class Link(object):
       local, remote = self.unsettled[delivery_tag]
       local.state = state
       local.modified = True
+      local.resumed = False
     else:
       self.unsettled[delivery_tag] = (State(state), State())
 
@@ -251,7 +254,8 @@ class Link(object):
         local.modified = False
 
       if local.settled:
-        role.settle(self, dtag)
+        if (self, dtag) in role.aliases:
+          role.settle(self, dtag)
         self.unsettled.pop(dtag)
 
     for local, ranges in states.items():

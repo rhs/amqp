@@ -357,8 +357,10 @@ class Broker:
                   settled = link.snd_settle_mode == 1, # XXX: enums
                   payload = xfr.payload)
 
-    for t, _, r in link.get_remote(modified=True):
-      if r.settled or r.state is not None:
+    for t, l, r in link.get_remote(modified=True):
+      if l.resumed:
+        link.settle(t, None)
+      elif r.settled or r.state is not None:
         def doit(t=t, s=r.state):
           state = source.settle(t, r.state)
           link.settle(t, state)
@@ -408,7 +410,9 @@ class Broker:
     target = self.targets[key]
 
     for t, l, r in link.get_remote():
-      if r.settled and not isinstance(l.state, TransactionalState):
+      if l.resumed:
+        link.settle(t, None)
+      elif r.settled and not isinstance(l.state, TransactionalState):
         state = target.settle(t, r.state)
         link.settle(t, state)
 
