@@ -149,11 +149,13 @@ class Session:
     self.connection.wait(predicate, timeout)
 
   @synchronized
-  def sender(self, target, name=None):
+  def sender(self, target, name=None, unsettled=None):
     if isinstance(target, basestring):
       target = Target(address=target)
     snd = Sender(self.connection, name or str(uuid4()), target)
     self.proto.add(snd.proto)
+    for k, v in (unsettled or {}).items():
+      snd.proto.resume(k, v)
     snd.proto.attach()
     self.wait(lambda: snd.proto.attached() or snd.proto.detaching())
     if snd.proto.remote_target is None:
@@ -161,16 +163,19 @@ class Session:
       raise LinkError("no such target: %s" % target)
     else:
       snd.address = getattr(snd.proto.remote_target, "address", None)
+      snd.unsettled = snd.proto.remote_unsettled()
     return snd
 
   @synchronized
-  def receiver(self, source, limit=0, drain=False, name=None):
+  def receiver(self, source, limit=0, drain=False, name=None, unsettled=None):
     if isinstance(source, basestring):
       source = Source(address=source)
     rcv = Receiver(self.connection, name or str(uuid4()), source)
     self.proto.add(rcv.proto)
     if limit:
       rcv.flow(limit, drain=drain)
+    for k, v in (unsettled or {}).items():
+      rcv.proto.resume(k, v)
     rcv.proto.attach()
     self.wait(lambda: rcv.proto.attached() or rcv.proto.attaching())
     if rcv.proto.remote_source is None:
@@ -178,6 +183,7 @@ class Session:
       raise LinkError("no such source: %s" % source)
     else:
       rcv.address = getattr(rcv.proto.remote_source, "address", None)
+      rcv.unsettled = rcv.proto.remote_unsettled()
     return rcv
 
   @synchronized
@@ -225,6 +231,7 @@ class Link:
     self._lock = self.connection._lock
     self.timeout = 120
     self.address = None
+    self.unsettled = {}
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
