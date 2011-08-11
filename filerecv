@@ -41,7 +41,7 @@ parser.add_option("-t", "--trace", default="err",
 parser.add_option("-c", "--count", type=int, default=0,
                   help="number of messages to receive (default %default)")
 parser.add_option("-C", "--container", type=str,
-                  default="%s.filesend" % socket.gethostname(),
+                  default="%s.filerecv" % socket.gethostname(),
                   help="specify the container-id")
 
 opts, args = parser.parse_args()
