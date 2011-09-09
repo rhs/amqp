@@ -23,6 +23,10 @@ from protocol import Header, DeliveryAnnotations, MessageAnnotations, \
     Properties, ApplicationProperties, Data, AmqpSequence, AmqpValue, Footer, \
     PROTOCOL_DECODER, PROTOCOL_ENCODER
 
+CONVERSIONS = {
+  "message_id": {long: Primitive("ulong"), int: Primitive("ulong")}
+  }
+
 class Message:
 
   def __init__(self, content=None, delivery_tag=None, **kwargs):
@@ -34,6 +38,11 @@ class Message:
     self.content = content
     self.footer = Footer({})
     for k, v in kwargs.items():
+      if k in CONVERSIONS:
+        mappings = CONVERSIONS[k]
+        t = type(v)
+        if t in mappings:
+          v = Value(mappings[t], v)
       for o in (self.header, self.properties, self.footer):
         if hasattr(o, k):
           setattr(o, k, v)
