@@ -85,7 +85,7 @@ class Session:
       raise SessionError("already begun")
     self.begin_sent = True
     self.post_frame(Begin(remote_channel = self.remote_channel,
-                          next_outgoing_id = self.outgoing.transfer_count + 1,
+                          next_outgoing_id = self.outgoing.unsettled_hwm + 1,
                           incoming_window = self.incoming.window,
                           outgoing_window = 65536, # this should NOT be self.outgoing.window
                           handle_max = 2147483647,
