@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export PYTHONPATH=$PWD/..
+exec ../broker -a -u demo-users -n demo-nodes "$@"

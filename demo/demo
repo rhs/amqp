@@ -1,0 +1,83 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+from common import *
+
+def create_link(address, role="sender", ref=None, host="0.0.0.0", port="5672",
+                user="demo", password="demo"):
+  msg = Message()
+  msg["opcode"] = "create-link"
+  msg["address"] = address
+  msg["role"] = role
+  msg["link-ref"] = ref or "%s.%s" % (address, role)
+  msg["host"] = host
+  msg["port"] = port
+  msg["sasl-user"] = user
+  msg["sasl-password"] = password
+  return msg
+
+def send_message(ref, id):
+  msg = Message()
+  msg["opcode"] = "send-message"
+  msg["link-ref"] = ref
+  msg["message-id"] = id
+  return msg
+
+OPCODES = {
+  "create-link": create_link,
+  "send-message": send_message
+  }
+
+opts, args = options()
+
+opargs = []
+kwargs = {}
+for a in args[1:]:
+  if "=" in a:
+    k, v = a.split("=", 2)
+    kwargs[k] = v
+  else:
+    opargs.append(a)
+
+msg = OPCODES[args[0]](*opargs, **kwargs)
+
+host = opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0"
+conn = Connection(auth=True)
+conn.tracing(*opts.trace.split())
+conn.connect(host, opts.port)
+conn.open(mechanism="PLAIN", username=opts.username, password=opts.password)
+ssn = conn.session()
+lnk = ssn.sender("control")
+
+try:
+  lnk.send(settled=True, message=msg)
+  while lnk.pending(True):
+    for t, l, r in lnk.pending():
+      print t, r.state
+      lnk.settle(t, r.state)
+except KeyboardInterrupt:
+  pass
+
+lnk.close()
+ssn.close()
+conn.close()
+
+for tag, local, remote in lnk.get_unsettled():
+  print "UNSETTLED:", tag, local, remote

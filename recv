@@ -113,8 +113,9 @@ try:
         lnk.flow(credit, drain=not opts.block)
 
     # XXX
-    for tag, _, _ in lnk.get_remote(settled=True):
-      lnk.settle(tag)
+    for tag, l, _ in lnk.get_remote(settled=True):
+      if l.state is not None:
+        lnk.settle(tag)
 
   if opts.txn:
     ssn.discharge(txn, fail=opts.rollback)

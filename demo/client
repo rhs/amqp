@@ -1,0 +1,97 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+from threading import Thread
+from common import *
+
+class Link:
+
+  def __init__(self, client, conn, link):
+    self.client = client
+    self.conn = conn
+    self.link = link
+
+  def send(self, msg):
+    test = Message(content=msg.content, message_id=msg["message-id"])
+    test["opcode"] = "test"
+    test["vendor"] = "redhat"
+    self.link.send(settled=True, message=test)
+
+    log = Message()
+    log["opcode"] = "log"
+    log["action"] = "sent"
+    log["message-id"] = msg["message-id"]
+    log["vendor"] = test["vendor"]
+    self.client.ctl.send(settled=True, message=log)
+
+  def test(self, msg):
+    print "TEST:", msg
+
+    log = Message()
+    log["opcode"] = "log"
+    log["action"] = "received"
+    log["message-id"] = msg.properties.message_id
+    self.client.ctl.send(settled=True, message=log)
+
+    return ACCEPTED
+
+class Client:
+
+  def __init__(self, ssn, lnk):
+    self.ssn = ssn
+    self.lnk = lnk
+    self.links = {}
+    self.ctl = self.ssn.sender("control")
+    msg = Message()
+    msg["opcode"] = "announce"
+    msg["vendor"] = "redhat"
+    msg["address"] = self.lnk.address
+    self.ctl.send(msg, settled=True)
+
+  def create_link(self, msg):
+    conn = Connection(auth=True)
+#    conn.tracing(*self.tracing)
+    conn.connect(host=msg["host"], port=int(msg["port"]))
+    conn.open(mechanism="PLAIN", username=msg["sasl-user"],
+              password=msg["sasl-password"])
+    ssn = conn.session()
+    address = msg["address"]
+    if msg["role"] == "sender":
+      snd = Link(self, conn, ssn.sender(address))
+      self.links[msg["link-ref"]] = snd
+    else:
+      rcv = Link(self, conn, ssn.receiver(address))
+      def run():
+        loop(rcv.link, rcv)
+      t = Thread(target=run)
+      t.setDaemon(True)
+      t.start()
+
+    return ACCEPTED
+
+  def send_message(self, msg):
+    ref = msg["link-ref"]
+    if ref not in self.links:
+      raise ValueError("unknown link reference: %r" % msg)
+    link = self.links[ref]
+    link.send(msg)
+    return ACCEPTED
+
+main(Client, Source(dynamic=True))

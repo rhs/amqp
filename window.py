@@ -20,7 +20,6 @@
 import pygtk
 pygtk.require('2.0')
 import gtk, gobject, cairo
-from threading import Thread
 
 class Screen(gtk.DrawingArea):
 
@@ -55,10 +54,9 @@ class Screen(gtk.DrawingArea):
       widget.draw(cr, w, h)
       cr.restore()
 
-class Window(Thread):
+class Window:
 
   def __init__(self, quit=None):
-    Thread.__init__(self)
     self.quit = quit
     self.window = gtk.Window()
     if self.quit:
@@ -76,3 +74,6 @@ class Window(Thread):
     while gtk.events_pending():
       gtk.main_iteration(block=False)
     return True
+
+  def run(self):
+    gtk.main()

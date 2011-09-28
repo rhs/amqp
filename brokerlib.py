@@ -413,7 +413,7 @@ class Broker:
       if l.resumed:
         link.settle(t, None)
       elif r.settled and not isinstance(l.state, TransactionalState):
-        state = target.settle(t, r.state)
+        state = target.settle(t, l.state)
         link.settle(t, state)
 
     if target.capacity() and link.credit() < 10: link.flow(10)

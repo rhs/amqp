@@ -1,0 +1,44 @@
+The scripts in this directory require the python amqp implementation
+(the parent of the directory containing this README) to be in the
+PYTHONPATH. This can be done with:
+
+  export PYTHONPATH=<path_to_amqp>
+
+Note that this file is found at <path_to_amqp>/demo/README.
+
+The demo directory contains the following scripts:
+
+  broker     -- a simple shell script to start the control broker
+  controller -- the demo controller application
+  client     -- the demo client application
+  demo       -- a control script used to trigger actions
+
+To use the demo take the following steps:
+
+  1. Start the control broker, e.g.:
+
+    ./broker -t frm
+
+  2. Start the controller application, e.g.:
+
+    ./controller
+
+  3. Start as many client applications as you like. These should
+     announce their presence to the controller via the control queue.
+     The python client application can be started thusly:
+
+    ./client
+
+  4. Use the demo app to create links and send messages:
+
+    ./demo create-link node1 ref=blah role=sender host=0.0.0.0 port=5672 user=demo password=demo
+    ./demo send-message blah m1
+    ./demo send-message blah m2
+    ./demo send-message blah m3
+    ./demo create-link node1 ref=bleh role=receiver host=0.0.0.0 port=5672 user=demo password=demo
+
+The controller and client apps will print useful info on stdout when
+interesting stuff happen. You can access the usage for any of the
+scripts by using the -h option, e.g.:
+
+  ./controller -h

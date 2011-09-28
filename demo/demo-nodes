@@ -1,0 +1,12 @@
+from queue import Queue
+
+control = Queue()
+
+node1 = Queue()
+node2 = Queue()
+node3 = Queue()
+node4 = Queue()
+node5 = Queue()
+node6 = Queue()
+node7 = Queue()
+node8 = Queue()

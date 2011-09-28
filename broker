@@ -78,6 +78,7 @@ try:
   broker.passwords = passwords
   broker.traces = opts.trace.split()
 
+  window = Window(lambda *args: selector.stop())
   nodes = {}
   for n in opts.nodes:
     exec open(n) in globals(), nodes
@@ -96,7 +97,6 @@ try:
     broker.nodes[a] = Queue(thresholds.get(a))
 
   selector = Selector()
-  window = Window(lambda *args: selector.stop())
   broker.listener = window.redraw
   broker.bind(opts.interface, opts.port)
   selector.register(broker)

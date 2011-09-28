@@ -42,8 +42,8 @@ class SASL(Dispatcher):
     self.username = username
     self.password = password
     self.post_frame(0, SaslInit(mechanism = self.mechanism,
-                                initial_response = "\0%s\0%s" % (self.username or "",
-                                                                 self.password or "")))
+                                initial_response = str("\0%s\0%s" % (self.username or "",
+                                                                     self.password or ""))))
 
   def server(self, mechanisms=("ANONYMOUS", "PLAIN"), passwords={}):
     self.mechanisms = mechanisms
