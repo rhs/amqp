@@ -52,6 +52,7 @@ class Connection:
     self.waiter = Waiter(self.condition)
     self.selector = Selector.default()
     self.timeout = 120
+    self.sock = None
 
   def tracing(self, *args, **kwargs):
     self.proto.tracing(*args, **kwargs)
@@ -62,10 +63,9 @@ class Connection:
 
   @synchronized
   def connect(self, host, port):
-    sock = socket.socket()
-    sock.connect((host, port))
-    sock.setblocking(0)
-    self.selector.register(ConnectionSelectable(sock, self, self.tick))
+    self.sock = socket.socket()
+    self.sock.connect((host, port))
+    self.sock.setblocking(0)
 
   @synchronized
   def pending(self):
@@ -110,6 +110,10 @@ class Connection:
       self.sasl.client(mechanism=mechanism, username=username,
                        password=password)
     self.proto.open(**kwargs)
+    # we do this here to prevent the server's sasl controls from being
+    # processed before we call sasl.client and set up the appropriate
+    # mechanism, username, and password
+    self.selector.register(ConnectionSelectable(self.sock, self, self.tick))
     if self.auth:
       self.wait(lambda: self.sasl.outcome is not None)
       if self.sasl.outcome != 0:
