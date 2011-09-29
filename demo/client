@@ -47,6 +47,7 @@ class Link:
     log = Message()
     log["opcode"] = "log"
     log["action"] = "received"
+    log["vendor"] = msg["vendor"]
     log["message-id"] = msg.properties.message_id
     self.client.ctl.send(settled=True, message=log)
 
