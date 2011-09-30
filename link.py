@@ -379,7 +379,8 @@ class Receiver(Link):
     if self.delivery_count is not None:
       self.link_credit -= state.delivery_count - self.delivery_count
     self.delivery_count = state.delivery_count
-    self.available = state.available
+    if state.available is not None:
+      self.available = state.available
 
   def flow(self, n, drain=False):
     self.link_credit += n
