@@ -59,6 +59,9 @@ class Window:
   def __init__(self, quit=None):
     self.quit = quit
     self.window = gtk.Window()
+    self.window.set_resizable(False)
+    self.window.set_geometry_hints(min_width=1024, min_height=768)
+#    self.window.fullscreen()
     if self.quit:
       self.window.connect("delete-event", quit)
     self.screen = Screen()
