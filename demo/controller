@@ -19,6 +19,7 @@
 #
 
 from common import *
+from fnmatch import fnmatch as match
 
 class Client:
 
@@ -40,8 +41,10 @@ class Controller:
     self.clients = []
 
   def relay(self, msg):
+    target = msg["target"]
     for c in self.clients:
-      c.send(msg)
+      if match(c.vendor, target):
+        c.send(msg)
 
   def announce(self, msg):
     vendor = msg["vendor"]

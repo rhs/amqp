@@ -21,7 +21,7 @@
 from common import *
 
 def create_link(address, role="sender", ref=None, host="0.0.0.0", port="5672",
-                user="demo", password="demo"):
+                user="demo", password="demo", target="*"):
   msg = Message()
   msg["opcode"] = "create-link"
   msg["address"] = address
@@ -31,13 +31,15 @@ def create_link(address, role="sender", ref=None, host="0.0.0.0", port="5672",
   msg["port"] = port
   msg["sasl-user"] = user
   msg["sasl-password"] = password
+  msg["target"] = target
   return msg
 
-def send_message(ref, id):
+def send_message(ref, id, target="*"):
   msg = Message()
   msg["opcode"] = "send-message"
   msg["link-ref"] = ref
   msg["message-id"] = id
+  msg["target"] = target
   return msg
 
 OPCODES = {
