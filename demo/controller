@@ -45,6 +45,7 @@ class Controller:
     for c in self.clients:
       if match(c.vendor, target):
         c.send(msg)
+    return ACCEPTED
 
   def announce(self, msg):
     vendor = msg["vendor"]
@@ -56,10 +57,10 @@ class Controller:
     return ACCEPTED
 
   def create_link(self, msg):
-    self.relay(msg)
+    return self.relay(msg)
 
   def send_message(self, msg):
-    self.relay(msg)
+    return self.relay(msg)
 
   def log(self, msg):
     print "LOG:", msg
