@@ -209,6 +209,8 @@ for line in open("sequence"):
         BRKS[brk].depth += 1
     balls = []
     window.redraw()
+  elif line.strip().startswith("+"):
+    time.sleep(float(line.strip()[1:]))
   else:
     start, stop = line.split()
     b = Demo()
