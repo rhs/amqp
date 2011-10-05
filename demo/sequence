@@ -1,6 +1,7 @@
 C:RH B:RH
 C:MS B:RH
 --
++2
 B:RH C:MS
 --
 C:MS B:SW
@@ -15,7 +16,7 @@ C:IN B:SW
 --
 C:RH B:SW
 --
-+1
++2
 B:SW C:RH
 --
 C:RH B:AP
