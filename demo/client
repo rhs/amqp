@@ -85,7 +85,7 @@ class Client:
     if ref in self.links:
       lnk = self.links.pop(ref)
       lnk.close()
-      print "CLOSING %s" % ref
+      print "CLOSED %s" % ref
     if msg["role"] == "sender":
       snd = Link(self, conn, ssn, ssn.sender(address))
       self.links[ref] = snd
