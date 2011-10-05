@@ -11,6 +11,7 @@ class Demo:
     self.x = 0.0
     self.y = 0.0
     self.angle = 0.0
+    self.alpha = 1.0
 
   def draw(self, cr, w, h):
     cr.translate(self.x, self.y)
@@ -20,7 +21,7 @@ class Demo:
     cr.translate(0, 0.05)
     cr.scale(0.1/img.get_width(), -0.1/img.get_height())
     cr.set_source_surface(img)
-    cr.paint()
+    cr.paint_with_alpha(self.alpha)
 
 def box(cr):
   cr.move_to(0.0, 0.1)
@@ -202,11 +203,17 @@ for line in open("sequence"):
         b.y = y1 + dy*i/steps
         b.angle = 2*pi*i/steps
       window.redraw()
+
     for b, start, stop in balls:
-      window.remove(b)
       cls, brk = stop.split(":")
       if cls == "B":
         BRKS[brk].depth += 1
+        window.redraw()
+      else:
+        for i in range(50):
+          b.alpha = 1.0 - i/50.0
+          window.redraw()
+      window.remove(b)
     balls = []
     window.redraw()
   elif line.strip().startswith("+"):
