@@ -193,6 +193,11 @@ for line in open("sequence"):
       cls, brk = start.split(":")
       if cls == "B":
         BRKS[brk].depth -= 1
+      else:
+        for i in range(51):
+          b.alpha = i/50.0
+          window.redraw()
+
     for i in range(steps):
       for b, start, stop in balls:
         x1, y1 = lookup(start)
@@ -210,7 +215,7 @@ for line in open("sequence"):
         BRKS[brk].depth += 1
         window.redraw()
       else:
-        for i in range(50):
+        for i in range(51):
           b.alpha = 1.0 - i/50.0
           window.redraw()
       window.remove(b)
@@ -222,6 +227,8 @@ for line in open("sequence"):
     start, stop = line.split()
     b = Demo()
     b.x, b.y = lookup(start)
+    if start[0] == "C":
+      b.alpha = 0.0
     window.add(b, 0, 0, 1.0, 1.0)
     balls.append((b, start, stop))
 
