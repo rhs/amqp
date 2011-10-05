@@ -19,7 +19,7 @@
 #
 
 import socket
-from connection import Connection as ProtoConnection
+from connection import Connection as ProtoConnection, ConnectionError
 from sasl import SASL
 from session import Session as ProtoSession, SessionError, FIXED, SLIDING
 from link import Link as ProtoLink, Sender as ProtoSender, \
@@ -117,14 +117,19 @@ class Connection:
     if self.auth:
       self.wait(lambda: self.sasl.outcome is not None)
       if self.sasl.outcome != 0:
-        raise Exception("authentication failed: %s" % self.sasl.outcome)
+        raise ConnectionError("authentication failed: %s" % self.sasl.outcome)
 
   def wait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
       timeout = self.timeout
     self.selector.wakeup()
-    if not self.waiter.wait(predicate, timeout):
+    if not self.waiter.wait(lambda: self.proto.exception is not None or self.proto.close_rcvd or predicate(), timeout):
       raise Timeout()
+
+  def ewait(self, predicate, timeout=DEFAULT):
+    self.wait(lambda: self.proto.exception is not None or self.proto.close_rcvd or predicate(), timeout)
+    if self.proto.exception is not None or self.proto.close_rcvd:
+      raise ConnectionError(str(self.proto.exception or "connection aborted"))
 
   @synchronized
   def session(self):
@@ -147,10 +152,10 @@ class Session:
     self.txn = None
     self.proto.begin()
 
-  def wait(self, predicate, timeout=DEFAULT):
+  def ewait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
       self.timeout = timeout
-    self.connection.wait(predicate, timeout)
+    self.connection.ewait(predicate, timeout)
 
   @synchronized
   def sender(self, target, name=None, unsettled=None):
@@ -161,7 +166,7 @@ class Session:
     for k, v in (unsettled or {}).items():
       snd.proto.resume(k, v)
     snd.proto.attach()
-    self.wait(lambda: snd.proto.attached() or snd.proto.detaching())
+    self.ewait(lambda: snd.proto.attached() or snd.proto.detaching())
     if snd.proto.remote_target is None:
       snd.close()
       raise LinkError("no such target: %s" % target)
@@ -181,7 +186,7 @@ class Session:
     for k, v in (unsettled or {}).items():
       rcv.proto.resume(k, v)
     rcv.proto.attach()
-    self.wait(lambda: rcv.proto.attached() or rcv.proto.attaching())
+    self.ewait(lambda: rcv.proto.attached() or rcv.proto.attaching())
     if rcv.proto.remote_source is None:
       rcv.close()
       raise LinkError("no such source: %s" % source)
@@ -237,10 +242,10 @@ class Link:
     self.address = None
     self.unsettled = {}
 
-  def wait(self, predicate, timeout=DEFAULT):
+  def ewait(self, predicate, timeout=DEFAULT):
     if timeout is DEFAULT:
       self.timeout = timeout
-    self.connection.wait(predicate, timeout)
+    self.connection.ewait(predicate, timeout)
 
   @synchronized
   def get_unsettled(self):
@@ -249,7 +254,7 @@ class Link:
   @synchronized
   def pending(self, block=False, timeout=None):
     if block:
-      self.wait(self._pending_unblocked, timeout)
+      self.ewait(self._pending_unblocked, timeout)
     return self.get_remote(modified=True)
 
   def _pending_unblocked(self):
@@ -283,12 +288,12 @@ class Link:
   def detach(self):
     self.proto.detach()
     # XXX
-    self.wait(self.proto.detached)
+    self.ewait(self.proto.detached)
 
   @synchronized
   def close(self):
     self.proto.close()
-    self.wait(self.proto.detached)
+    self.ewait(self.proto.detached)
 
 class Sender(Link):
 
@@ -298,7 +303,7 @@ class Sender(Link):
 
   @synchronized
   def send(self, message=None, delivery_tag=None, txn=None, **kwargs):
-    self.wait(self.capacity)
+    self.ewait(self.capacity)
     if message:
       kwargs["message_format"] = 0
       kwargs["payload"] = encode(message)
@@ -321,7 +326,7 @@ class Receiver(Link):
   @synchronized
   def pending(self, block=False, timeout=None):
     if block:
-      self.wait(self._pending_unblocked, timeout)
+      self.ewait(self._pending_unblocked, timeout)
     return self.proto.pending()
 
   def _pending_unblocked(self):
@@ -330,7 +335,7 @@ class Receiver(Link):
   @synchronized
   def draining(self, block=False, timeout=None):
     if block:
-      self.wait(self._draining_unblocked, timeout)
+      self.ewait(self._draining_unblocked, timeout)
     return self.proto.draining()
 
   def _draining_unblocked(self):
