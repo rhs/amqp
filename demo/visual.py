@@ -179,11 +179,11 @@ def lookup(path):
     m = m[x]
   return m
 
-steps = 100
 
-for i in range(2*steps):
+for i in range(250):
   window.redraw()
 
+steps = 250
 balls = []
 
 for line in open("sequence"):
@@ -201,7 +201,7 @@ for line in open("sequence"):
         b.x = x1 + dx*i/steps
         b.y = y1 + dy*i/steps
         b.angle = 2*pi*i/steps
-        window.redraw()
+      window.redraw()
     for b, start, stop in balls:
       window.remove(b)
       cls, brk = stop.split(":")
