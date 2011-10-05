@@ -3,7 +3,7 @@ from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
 
-img = ImageSurface.create_from_png("button.png")
+img = ImageSurface.create_from_png("button96.png")
 
 class Demo:
 
@@ -33,12 +33,7 @@ def box(cr):
   cr.arc(0.1, 0.9, 0.1, pi/2.0, pi)
   cr.close_path()
 
-class Broker:
-
-  def __init__(self, vendor):
-    self.vendor = vendor
-
-  def draw(self, cr, w, h):
+def component(cr, text):
     cr.set_source_rgb(0, 0, 0)
     cr.set_line_width(0.05)
     cr.translate(-0.03, 0.03)
@@ -54,13 +49,38 @@ class Broker:
     cr.set_source_rgb(0.75, 0, 0)
     cr.move_to(0.1, 0.4)
     cr.set_font_size(0.2)
-    xb, yb, w, h, xa, ya = cr.text_extents(self.vendor)
+    xb, yb, w, h, xa, ya = cr.text_extents(text)
     cr.scale(0.8/w, -1.0)
-    cr.show_text(self.vendor)
+    cr.show_text(text)
     cr.stroke()
 
-class Client(Broker):
-  pass
+class Broker:
+
+  def __init__(self, vendor):
+    self.vendor = vendor
+    self.depth = 0
+
+  def draw(self, cr, w, h):
+    cr.save()
+    component(cr, self.vendor)
+    cr.restore()
+    cr.translate(0.25, 0.6)
+    for i in range(self.depth):
+      cr.save()
+      cr.translate(0, 0.1*i)
+      cr.scale(0.5/img.get_width(), -0.5/img.get_height())
+      cr.set_source_surface(img)
+      cr.paint()
+      cr.restore()
+#    cr.show_text(str(self.depth))
+
+class Client:
+
+  def __init__(self, vendor):
+    self.vendor = vendor
+
+  def draw(self, cr, w, h):
+    component(cr, self.vendor)
 
 class Line:
 
@@ -97,7 +117,39 @@ class Text:
     cr.show_text(self.text)
     cr.stroke()
 
-demo = Demo()
+CLI_COORDS = {
+  "RH": (0.0571428571429, 0.7),
+  "MS": (0.214285714286,  0.7),
+  "IN": (0.371428571429,  0.7),
+  "ST": (0.528571428571,  0.7),
+  "AP": (0.685714285714,  0.7),
+  "SW": (0.842857142857,  0.7)
+  }
+
+BRK_COORDS = {
+  "RH": (0.0375, 0.3),
+  "VM": (0.175, 0.3),
+  "MS": (0.45, 0.3),
+  "IN": (0.5875, 0.3),
+  "ST": (0.3125, 0.3),
+  "AP": (0.725, 0.3),
+  "SW": (0.8625, 0.3)
+  }
+
+ROOT = {
+  "C": CLI_COORDS,
+  "B": BRK_COORDS
+  }
+
+BRKS = {
+  "RH": Broker("Red Hat"),
+  "VM": Broker("VMWare"),
+  "MS": Broker("Microsoft"),
+  "IN": Broker("Inetco"),
+  "ST": Broker("Storm MQ"),
+  "AP": Broker("Apache Qpid"),
+  "SW": Broker("Swift MQ")
+  }
 
 window = Window()
 cpad = 0.4/7
@@ -113,35 +165,55 @@ window.add(Line(0.0375, 0.5, 1 - 0.0375, 0.5), 0, 0, 1, 1)
 
 window.add(Text("Brokers"), 0.5, 0.05, 0.7, 0.1)
 bpad = 0.3/8
-window.add(Broker("Red Hat"), bpad, 0.2, 0.1, 0.1)
-window.add(Broker("VMWare"), 0.1 + 2*bpad, 0.2, 0.1, 0.1)
-window.add(Broker("Microsoft"), 0.2 + 3*bpad, 0.2, 0.1, 0.1)
-window.add(Broker("Inetco"), 0.3 + 4*bpad, 0.2, 0.1, 0.1)
-window.add(Broker("Storm MQ"), 0.4 + 5*bpad, 0.2, 0.1, 0.1)
-window.add(Broker("Apache Qpid"), 0.5 + 6*bpad, 0.2, 0.1, 0.1)
-window.add(Broker("Swift MQ"), 0.6 + 7*bpad, 0.2, 0.1, 0.1)
-window.add(demo, 0, 0, 1.0, 1.0)
+window.add(BRKS["RH"], bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["VM"], 0.1 + 2*bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["MS"], 0.2 + 3*bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["IN"], 0.3 + 4*bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["ST"], 0.4 + 5*bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["AP"], 0.5 + 6*bpad, 0.2, 0.1, 0.1)
+window.add(BRKS["SW"], 0.6 + 7*bpad, 0.2, 0.1, 0.1)
 
-first = True
+def lookup(path):
+  m = ROOT
+  for x in path.split(":"):
+    m = m[x]
+  return m
 
-for line in open("path"):
-  x, y, steps = [float(n) for n in line.split()]
-  steps = int(steps)
-  if first:
-    demo.x = x
-    demo.y = y
+steps = 100
+
+for i in range(2*steps):
+  window.redraw()
+
+balls = []
+
+for line in open("sequence"):
+  if line.strip() == "--":
+    for b, start, stop in balls:
+      cls, brk = start.split(":")
+      if cls == "B":
+        BRKS[brk].depth -= 1
     for i in range(steps):
-      window.redraw()
-    first = False
+      for b, start, stop in balls:
+        x1, y1 = lookup(start)
+        x2, y2 = lookup(stop)
+        dx = x2 - x1
+        dy = y2 - y1
+        b.x = x1 + dx*i/steps
+        b.y = y1 + dy*i/steps
+        b.angle = 2*pi*i/steps
+        window.redraw()
+    for b, start, stop in balls:
+      window.remove(b)
+      cls, brk = stop.split(":")
+      if cls == "B":
+        BRKS[brk].depth += 1
+    balls = []
+    window.redraw()
   else:
-    xi = demo.x
-    yi = demo.y
-    dx = x - xi
-    dy = y - yi
-    for i in range(steps):
-      demo.x = xi + dx*i/steps
-      demo.y = yi + dy*i/steps
-      demo.angle = 2*pi*i/steps
-      window.redraw()
+    start, stop = line.split()
+    b = Demo()
+    b.x, b.y = lookup(start)
+    window.add(b, 0, 0, 1.0, 1.0)
+    balls.append((b, start, stop))
 
-time.sleep(1)
+time.sleep(3)

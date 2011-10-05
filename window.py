@@ -20,6 +20,7 @@
 import pygtk
 pygtk.require('2.0')
 import gtk, gobject, cairo
+from collections import OrderedDict
 
 class Screen(gtk.DrawingArea):
 
@@ -27,10 +28,13 @@ class Screen(gtk.DrawingArea):
 
   def __init__(self):
     gtk.DrawingArea.__init__(self)
-    self.widgets = []
+    self.widgets = OrderedDict()
 
   def add(self, widget, x, y, w, h):
-    self.widgets.append((widget, x, y, w, h))
+    self.widgets[widget] = (x, y, w, h)
+
+  def remove(self, widget):
+    del self.widgets[widget]
 
   def do_expose_event(self, event):
     cr = self.window.cairo_create()
@@ -47,7 +51,7 @@ class Screen(gtk.DrawingArea):
     cr.translate(0, height)
     cr.scale(width/1.0, -height/1.0)
 
-    for widget, x, y, w, h in self.widgets:
+    for widget, (x, y, w, h) in self.widgets.items():
       cr.save()
       cr.translate(x, y)
       cr.scale(w/1.0, h/1.0)
@@ -71,6 +75,9 @@ class Window:
 
   def add(self, widget, x, y, w, h):
     self.screen.add(widget, x, y, w, h)
+
+  def remove(self, widget):
+    self.screen.remove(widget)
 
   def redraw(self):
     self.window.queue_draw()

@@ -1,0 +1,27 @@
+C:RH B:RH
+C:MS B:RH
+--
+B:RH C:MS
+--
+C:MS B:SW
+--
+C:RH B:AP
+C:MS B:AP
+C:IN B:AP
+--
+C:MS B:SW
+--
+C:IN B:SW
+--
+C:RH B:SW
+--
+B:SW C:RH
+--
+C:RH B:AP
+C:MS B:AP
+--
+B:RH C:IN
+B:SW C:MS
+B:SW C:AP
+B:SW C:ST
+--
