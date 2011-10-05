@@ -97,3 +97,11 @@ class SASL(Dispatcher):
 
   def __tunnel(self):
     self.connection.write(self.input.read())
+
+  def error(self, exc):
+    if self.output_redirect:
+      self.connection.error(exc)
+
+  def closed(self):
+    if self.output_redirect:
+      self.connection.closed()
