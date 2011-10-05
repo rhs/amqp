@@ -66,4 +66,7 @@ class Controller:
     print "LOG:", msg
     return ACCEPTED
 
+  def reset(self, msg):
+    return self.relay(msg)
+
 main(Controller, "control")

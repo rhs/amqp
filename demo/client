@@ -23,9 +23,10 @@ from common import *
 
 class Link:
 
-  def __init__(self, client, conn, link):
+  def __init__(self, client, conn, ssn, link):
     self.client = client
     self.conn = conn
+    self.session = ssn
     self.link = link
 
   def send(self, msg):
@@ -42,16 +43,22 @@ class Link:
     self.client.ctl.send(settled=True, message=log)
 
   def test(self, msg):
-    print "TEST:", msg
+    print "RECV", msg
 
     log = Message()
     log["opcode"] = "log"
     log["action"] = "received"
-    log["vendor"] = msg["vendor"]
+    log["vendor"] = "redhat"
     log["message-id"] = msg.properties.message_id
+    log["message-vendor"] = msg["vendor"]
     self.client.ctl.send(settled=True, message=log)
 
     return ACCEPTED
+
+  def close(self):
+    self.link.close()
+    self.session.close()
+    self.conn.close()
 
 class Client:
 
@@ -74,11 +81,19 @@ class Client:
               password=msg["sasl-password"])
     ssn = conn.session()
     address = msg["address"]
+    ref = msg["link-ref"]
+    if ref in self.links:
+      lnk = self.links.pop(ref)
+      lnk.close()
+      print "CLOSING %s" % ref
     if msg["role"] == "sender":
-      snd = Link(self, conn, ssn.sender(address))
-      self.links[msg["link-ref"]] = snd
+      snd = Link(self, conn, ssn, ssn.sender(address))
+      self.links[ref] = snd
+      print "OPENED %s -> %s" % (ref, address)
     else:
-      rcv = Link(self, conn, ssn.receiver(address))
+      rcv = Link(self, conn, ssn, ssn.receiver(address))
+      self.links[ref] = rcv
+      print "OPENED %s <- %s" % (ref, address)
       def run():
         loop(rcv.link, rcv)
       t = Thread(target=run)
@@ -93,6 +108,15 @@ class Client:
       raise ValueError("unknown link reference: %r" % msg)
     link = self.links[ref]
     link.send(msg)
+    print "SENT %s" % msg
+    return ACCEPTED
+
+  def reset(self, msg):
+    for ref in list(self.links):
+      l = self.links.pop(ref)
+      l.close()
+      print "CLOSED %s" % ref
+    print "RESET"
     return ACCEPTED
 
 main(Client, Source(dynamic=True))

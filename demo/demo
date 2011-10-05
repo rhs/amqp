@@ -42,9 +42,16 @@ def send_message(ref, id, target="*"):
   msg["target"] = target
   return msg
 
+def reset(target="*"):
+  msg = Message()
+  msg["opcode"] = "reset"
+  msg["target"] = target
+  return msg
+
 OPCODES = {
   "create-link": create_link,
-  "send-message": send_message
+  "send-message": send_message,
+  "reset": reset
   }
 
 opts, args = options()
