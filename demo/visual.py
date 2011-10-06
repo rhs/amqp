@@ -7,6 +7,10 @@ if "unicorn" in sys.argv:
   img = ImageSurface.create_from_png("unicorn96.png")
   vendor_offset = 0.025
   vendor_color = (1, 1, 1)
+elif "blue" in sys.argv:
+  img = ImageSurface.create_from_png("bluebubble96.png")
+  vendor_offset = 0
+  vendor_color = (1, 1, 1)
 else:
   img = ImageSurface.create_from_png("bubble96.png")
   vendor_offset = 0
