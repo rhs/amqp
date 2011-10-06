@@ -67,6 +67,7 @@ class Controller:
     return ACCEPTED
 
   def reset(self, msg):
+    print "RESET"
     return self.relay(msg)
 
 main(Controller, "control")

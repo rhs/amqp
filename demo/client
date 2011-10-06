@@ -18,6 +18,7 @@
 # under the License.
 #
 
+import traceback
 from threading import Thread
 from common import *
 
@@ -95,7 +96,11 @@ class Client:
       self.links[ref] = rcv
       print "OPENED %s <- %s" % (ref, address)
       def run():
-        loop(rcv.link, rcv)
+        try:
+          loop(rcv.link, rcv)
+        except:
+          print "ERROR %s" % ref
+          traceback.print_exc()
       t = Thread(target=run)
       t.setDaemon(True)
       t.start()
@@ -114,7 +119,11 @@ class Client:
   def reset(self, msg):
     for ref in list(self.links):
       l = self.links.pop(ref)
-      l.close()
+      try:
+        l.close()
+      except:
+        print "ERROR %s" % ref
+        traceback.print_exc()
       print "CLOSED %s" % ref
     print "RESET"
     return ACCEPTED
