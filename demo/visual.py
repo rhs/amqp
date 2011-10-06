@@ -3,7 +3,14 @@ from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
 
-img = ImageSurface.create_from_png("unicorn96.png")
+if "unicorn" in sys.argv:
+  img = ImageSurface.create_from_png("unicorn96.png")
+  vendor_offset = 0.025
+  vendor_color = (1, 1, 1)
+else:
+  img = ImageSurface.create_from_png("bubble96.png")
+  vendor_offset = 0
+  vendor_color = (0.5, 0.5, 0.5)
 
 class Ball:
 
@@ -25,8 +32,8 @@ class Ball:
     cr.set_source_surface(img)
     cr.paint_with_alpha(self.alpha)
     cr.restore()
-    cr.set_source_rgba(1, 1, 1, self.alpha)
-    cr.translate(0.035, -0.035)
+    cr.set_source_rgba(*(vendor_color + (self.alpha,)))
+    cr.translate(0.035, -0.06 + vendor_offset)
     cr.set_font_size(0.05)
     xb, yb, w, h, xa, ya = cr.text_extents(self.vendor)
     cr.scale(0.06/w, -1.0)
