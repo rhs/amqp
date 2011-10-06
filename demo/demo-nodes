@@ -10,3 +10,5 @@ node5 = Queue()
 node6 = Queue()
 node7 = Queue()
 node8 = Queue()
+
+log = Queue(ring=0, acquire=False, dequeue=False)

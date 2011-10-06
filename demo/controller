@@ -38,6 +38,7 @@ class Controller:
 
   def __init__(self, ssn, lnk):
     self.ssn = ssn
+    self.logger = self.ssn.sender("log")
     self.clients = []
 
   def relay(self, msg):
@@ -64,6 +65,7 @@ class Controller:
 
   def log(self, msg):
     print "LOG:", msg
+    self.logger.send(msg, settled=True)
     return ACCEPTED
 
   def reset(self, msg):
