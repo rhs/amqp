@@ -3,7 +3,7 @@ from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
 
-img = ImageSurface.create_from_png("button96.png")
+img = ImageSurface.create_from_png("unicorn96.png")
 
 class Ball:
 
@@ -25,11 +25,12 @@ class Ball:
     cr.set_source_surface(img)
     cr.paint_with_alpha(self.alpha)
     cr.restore()
-    cr.set_source_rgba(0, 0, 0, self.alpha)
-    cr.translate(0.015, -0.07)
+    cr.set_source_rgba(1, 1, 1, self.alpha)
+    cr.translate(0.035, -0.035)
     cr.set_font_size(0.05)
     xb, yb, w, h, xa, ya = cr.text_extents(self.vendor)
     cr.scale(0.06/w, -1.0)
+    cr.scale(0.5, 0.5)
     cr.show_text(self.vendor)
     cr.stroke()
 
