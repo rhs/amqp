@@ -5,9 +5,10 @@ from cairo import ImageSurface, LINE_CAP_ROUND
 
 img = ImageSurface.create_from_png("button96.png")
 
-class Demo:
+class Ball:
 
-  def __init__(self):
+  def __init__(self, vendor):
+    self.vendor = vendor
     self.x = 0.0
     self.y = 0.0
     self.angle = 0.0
@@ -19,9 +20,18 @@ class Demo:
     cr.rotate(self.angle)
     cr.translate(-0.05, 0.0)
     cr.translate(0, 0.05)
+    cr.save()
     cr.scale(0.1/img.get_width(), -0.1/img.get_height())
     cr.set_source_surface(img)
     cr.paint_with_alpha(self.alpha)
+    cr.restore()
+    cr.set_source_rgba(0, 0, 0, self.alpha)
+    cr.translate(0.015, -0.07)
+    cr.set_font_size(0.05)
+    xb, yb, w, h, xa, ya = cr.text_extents(self.vendor)
+    cr.scale(0.06/w, -1.0)
+    cr.show_text(self.vendor)
+    cr.stroke()
 
 def box(cr):
   cr.move_to(0.0, 0.1)
@@ -59,21 +69,26 @@ class Broker:
 
   def __init__(self, vendor):
     self.vendor = vendor
-    self.depth = 0
+    self.messages = []
+
+  def enqueue(self, item):
+    self.messages.append(item)
+
+  def dequeue(self):
+    return self.messages.pop(0)
 
   def draw(self, cr, w, h):
     cr.save()
     component(cr, self.vendor)
     cr.restore()
-    cr.translate(0.25, 0.6)
-    for i in range(self.depth):
+    cr.translate(0.25, 0.8)
+    for i in range(len(self.messages)):
       cr.save()
-      cr.translate(0, 0.1*i)
+      cr.translate(0, 0.1*(i - len(self.messages)/2.0))
       cr.scale(0.5/img.get_width(), -0.5/img.get_height())
       cr.set_source_surface(img)
       cr.paint()
       cr.restore()
-#    cr.show_text(str(self.depth))
 
 class Client:
 
@@ -119,22 +134,22 @@ class Text:
     cr.stroke()
 
 CLI_COORDS = {
-  "RH": (0.0571428571429, 0.7),
-  "MS": (0.214285714286,  0.7),
-  "IN": (0.371428571429,  0.7),
-  "ST": (0.528571428571,  0.7),
-  "AP": (0.685714285714,  0.7),
-  "SW": (0.842857142857,  0.7)
+  "RH": (0.0571428571429, 0.75),
+  "MS": (0.214285714286,  0.75),
+  "IN": (0.371428571429,  0.75),
+  "ST": (0.528571428571,  0.75),
+  "AP": (0.685714285714,  0.75),
+  "SW": (0.842857142857,  0.75)
   }
 
 BRK_COORDS = {
-  "RH": (0.0375, 0.3),
-  "VM": (0.175, 0.3),
-  "MS": (0.45, 0.3),
-  "IN": (0.5875, 0.3),
-  "ST": (0.3125, 0.3),
-  "AP": (0.725, 0.3),
-  "SW": (0.8625, 0.3)
+  "RH": (0.0375, 0.25),
+  "VM": (0.175, 0.25),
+  "MS": (0.45, 0.25),
+  "IN": (0.5875, 0.25),
+  "ST": (0.3125, 0.25),
+  "AP": (0.725, 0.25),
+  "SW": (0.8625, 0.25)
   }
 
 ROOT = {
@@ -180,7 +195,6 @@ def lookup(path):
     m = m[x]
   return m
 
-
 for i in range(250):
   window.redraw()
 
@@ -190,9 +204,9 @@ balls = []
 for line in open("sequence"):
   if line.strip() == "--":
     for b, start, stop in balls:
-      cls, brk = start.split(":")
+      cls, vnd = start.split(":")
       if cls == "B":
-        BRKS[brk].depth -= 1
+        b.vendor = BRKS[vnd].dequeue()
       else:
         for i in range(51):
           b.alpha = i/50.0
@@ -210,9 +224,9 @@ for line in open("sequence"):
       window.redraw()
 
     for b, start, stop in balls:
-      cls, brk = stop.split(":")
+      cls, vnd = stop.split(":")
       if cls == "B":
-        BRKS[brk].depth += 1
+        BRKS[vnd].enqueue(start.split(":")[-1])
         window.redraw()
       else:
         for i in range(51):
@@ -225,9 +239,10 @@ for line in open("sequence"):
     time.sleep(float(line.strip()[1:]))
   else:
     start, stop = line.split()
-    b = Demo()
+    cls, vnd = start.split(":")
+    b = Ball(vnd)
     b.x, b.y = lookup(start)
-    if start[0] == "C":
+    if cls == "C":
       b.alpha = 0.0
     window.add(b, 0, 0, 1.0, 1.0)
     balls.append((b, start, stop))
