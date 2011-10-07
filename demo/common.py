@@ -34,8 +34,9 @@ def loop(link, obj):
     print "UNSETTLED:", tag, local, remote
 
 def settle(link):
-  for tag, _, _ in link.get_remote(settled=True):
-    link.settle(tag)
+  for tag, l, r in link.get_remote(settled=True):
+    if l.state is not None:
+      link.settle(tag)
 
 def dispatch(msg, obj):
   try:
@@ -90,3 +91,23 @@ def main(cls, source):
   lnk.close()
   ssn.close()
   conn.close()
+
+RH = "redhat"
+VM = "vmware"
+IN = "inetco"
+AP = "apache"
+MS = "microsoft"
+SW = "swiftmq"
+
+VENDORS = [RH, VM, IN, AP, MS, SW]
+
+CLIENTS = [RH, AP, SW, IN, MS]
+BROKERS = [RH, VM, IN, AP, SW, MS]
+BRADDRS = {
+  RH: ("ec2-50-16-33-219.compute-1.amazonaws.com", 5672, "demo", "demo"),
+  VM: ("ec2-79-125-83-217.eu-west-1.compute.amazonaws.com", 5672, "guest", "guest"),
+  IN: ("insight.inetco.com", 5672, "demo", "demo"),
+  AP: ("ec2-50-16-33-219.compute-1.amazonaws.com", 15672, "guest", "guest"),
+  SW: ("mail.iit.de", 5672, "demo", "demo"),
+  MS: ("int7001sbuser-0-9.servicebus.int7.windows-int.net", 5672, "user", "Passw0rd!12")
+  }

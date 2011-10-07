@@ -2,19 +2,19 @@ import sys, time
 from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
+from common import *
 
-if "unicorn" in sys.argv:
-  img = ImageSurface.create_from_png("unicorn96.png")
-  vendor_offset = 0.025
-  vendor_color = (1, 1, 1)
-elif "blue" in sys.argv:
-  img = ImageSurface.create_from_png("bluebubble96.png")
-  vendor_offset = 0
-  vendor_color = (1, 1, 1)
-else:
-  img = ImageSurface.create_from_png("bubble96.png")
-  vendor_offset = 0
-  vendor_color = (0.5, 0.5, 0.5)
+LOGOS = {}
+MESSAGES = {}
+for v in VENDORS:
+  LOGOS[v] = ImageSurface.create_from_png("images/broker-%s.png" % v)
+for v in CLIENTS:
+  MESSAGES[v] = ImageSurface.create_from_png("images/message-%s.png" % v)
+
+BALL_SIZE = 0.1
+VEND_SIZE = 0.25
+VEND_W = VEND_SIZE
+VEND_H = VEND_SIZE
 
 class Ball:
 
@@ -26,56 +26,21 @@ class Ball:
     self.alpha = 1.0
 
   def draw(self, cr, w, h):
+    scale = BALL_SIZE
     cr.translate(self.x, self.y)
-    cr.translate(0.05, 0.0)
     cr.rotate(self.angle)
-    cr.translate(-0.05, 0.0)
-    cr.translate(0, 0.05)
-    cr.save()
-    cr.scale(0.1/img.get_width(), -0.1/img.get_height())
-    cr.set_source_surface(img)
+    cr.translate(-scale/2, scale/2)
+    ball = MESSAGES[self.vendor]
+    cr.scale(scale/ball.get_width(), -scale/ball.get_height())
+    cr.set_source_surface(ball)
     cr.paint_with_alpha(self.alpha)
-    cr.restore()
-    cr.set_source_rgba(*(vendor_color + (self.alpha,)))
-    cr.translate(0.035, -0.06 + vendor_offset)
-    cr.set_font_size(0.05)
-    xb, yb, w, h, xa, ya = cr.text_extents(self.vendor)
-    cr.scale(0.06/w, -1.0)
-    cr.scale(0.5, 0.5)
-    cr.show_text(self.vendor)
-    cr.stroke()
 
-def box(cr):
-  cr.move_to(0.0, 0.1)
-  cr.arc(0.1, 0.1, 0.1, -pi, -pi/2.0)
-  cr.line_to(0.9, 0.0)
-  cr.arc(0.9, 0.1, 0.1, -pi/2.0, 0)
-  cr.line_to(1.0, 0.9)
-  cr.arc(0.9, 0.9, 0.1, 0.0, pi/2.0)
-  cr.line_to(0.1, 1.0)
-  cr.arc(0.1, 0.9, 0.1, pi/2.0, pi)
-  cr.close_path()
-
-def component(cr, text):
-    cr.set_source_rgb(0, 0, 0)
-    cr.set_line_width(0.05)
-    cr.translate(-0.03, 0.03)
-    box(cr)
-    cr.set_source_rgb(0.75, 0.75, 0.75)
-    cr.stroke()
-    cr.translate(0.03, -0.03)
-    box(cr)
-    cr.set_source_rgb(0, 0, 0)
-    cr.stroke_preserve()
-    cr.set_source_rgb(0.9, 0.9, 1.0)
-    cr.fill()
-    cr.set_source_rgb(0.75, 0, 0)
-    cr.move_to(0.1, 0.4)
-    cr.set_font_size(0.2)
-    xb, yb, w, h, xa, ya = cr.text_extents(text)
-    cr.scale(0.8/w, -1.0)
-    cr.show_text(text)
-    cr.stroke()
+def component(cr, vendor):
+  logo = LOGOS[vendor]
+  cr.translate(0.0, 1.0)
+  cr.scale(1.0/logo.get_width(), -1.0/logo.get_height())
+  cr.set_source_surface(logo)
+  cr.paint()
 
 class Broker:
 
@@ -93,14 +58,16 @@ class Broker:
     cr.save()
     component(cr, self.vendor)
     cr.restore()
-    cr.translate(0.25, 0.8)
-    for i in range(len(self.messages)):
-      cr.save()
-      cr.translate(0, 0.1*(i - len(self.messages)/2.0))
-      cr.scale(0.5/img.get_width(), -0.5/img.get_height())
-      cr.set_source_surface(img)
-      cr.paint()
-      cr.restore()
+    if self.messages:
+      cr.translate((1.0 - BALL_SIZE/VEND_W)/2, 0.55 + 0.5*BALL_SIZE/VEND_H)
+      for i in range(len(self.messages)):
+        msg = MESSAGES[self.messages[len(self.messages) - 1 - i]]
+        cr.save()
+        cr.translate(0, 0.1*(i - len(self.messages)/2.0))
+        cr.scale(BALL_SIZE/(VEND_W*msg.get_width()), -BALL_SIZE/(VEND_H*msg.get_height()))
+        cr.set_source_surface(msg)
+        cr.paint()
+        cr.restore()
 
 class Client:
 
@@ -145,61 +112,50 @@ class Text:
     cr.show_text(self.text)
     cr.stroke()
 
-CLI_COORDS = {
-  "RH": (0.0571428571429, 0.75),
-  "MS": (0.214285714286,  0.75),
-  "IN": (0.371428571429,  0.75),
-  "ST": (0.528571428571,  0.75),
-  "AP": (0.685714285714,  0.75),
-  "SW": (0.842857142857,  0.75)
+BRKS = {
+  "RH": Broker(RH),
+  "VM": Broker(VM),
+  "MS": Broker(MS),
+  "IN": Broker(IN),
+  "AP": Broker(AP),
+  "SW": Broker(SW)
+  }
+CLIS = {
+  "RH": Client(RH),
+  "MS": Client(MS),
+  "IN": Client(IN),
+  "AP": Client(AP),
+  "SW": Client(SW)
   }
 
-BRK_COORDS = {
-  "RH": (0.0375, 0.25),
-  "VM": (0.175, 0.25),
-  "MS": (0.45, 0.25),
-  "IN": (0.5875, 0.25),
-  "ST": (0.3125, 0.25),
-  "AP": (0.725, 0.25),
-  "SW": (0.8625, 0.25)
-  }
+window = Window()
+cpad = (1.7 - VEND_W*len(CLIS))/(len(CLIS)+1)
+window.add(Text("Clients"), 1.7/2, 0.9, 0.2, 0.05)
+idx = 0
+for c in ("RH", "MS", "IN", "AP", "SW"):
+  window.add(CLIS[c], cpad*(idx+1) + VEND_W*idx, 0.9 - VEND_H, VEND_W, VEND_H)
+  idx += 1
+
+window.add(Line(0.0375, 0.5, 1.7 - 0.0375, 0.5), 0, 0, 1, 1)
+
+window.add(Text("Brokers"), 1.7/2, 0.05, 0.2, 0.05)
+bpad = (1.7 - VEND_W*len(BRKS))/(len(BRKS)+1)
+idx = 0
+for c in ("RH", "VM", "MS", "IN", "AP", "SW"):
+  window.add(BRKS[c], bpad*(idx+1) + VEND_W*idx, 0.1, VEND_W, VEND_H)
+  idx += 1
+
+CLI_COORDS = {}
+for k, v in CLIS.items():
+  CLI_COORDS[k] = (v._Screen__x + v._Screen__w/2, v._Screen__y + v._Screen__h/2)
+BRK_COORDS = {}
+for k, v in BRKS.items():
+  BRK_COORDS[k] = (v._Screen__x + v._Screen__w/2, v._Screen__y + v._Screen__h/2)
 
 ROOT = {
   "C": CLI_COORDS,
   "B": BRK_COORDS
   }
-
-BRKS = {
-  "RH": Broker("Red Hat"),
-  "VM": Broker("VMWare"),
-  "MS": Broker("Microsoft"),
-  "IN": Broker("Inetco"),
-  "ST": Broker("Storm MQ"),
-  "AP": Broker("Apache Qpid"),
-  "SW": Broker("Swift MQ")
-  }
-
-window = Window()
-cpad = 0.4/7
-window.add(Text("Clients"), 0.5, 0.85, 0.7, 0.1)
-window.add(Client("Red Hat"), cpad, 0.7, 0.1, 0.1)
-window.add(Client("Microsoft"), 0.1 + 2*cpad, 0.7, 0.1, 0.1)
-window.add(Client("Inetco"), 0.2 + 3*cpad, 0.7, 0.1, 0.1)
-window.add(Client("Storm MQ"), 0.3 + 4*cpad, 0.7, 0.1, 0.1)
-window.add(Client("Apache Qpid"), 0.4 + 5*cpad, 0.7, 0.1, 0.1)
-window.add(Client("Swift MQ"), 0.5 + 6*cpad, 0.7, 0.1, 0.1)
-
-window.add(Line(0.0375, 0.5, 1 - 0.0375, 0.5), 0, 0, 1, 1)
-
-window.add(Text("Brokers"), 0.5, 0.05, 0.7, 0.1)
-bpad = 0.3/8
-window.add(BRKS["RH"], bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["VM"], 0.1 + 2*bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["MS"], 0.2 + 3*bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["IN"], 0.3 + 4*bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["ST"], 0.4 + 5*bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["AP"], 0.5 + 6*bpad, 0.2, 0.1, 0.1)
-window.add(BRKS["SW"], 0.6 + 7*bpad, 0.2, 0.1, 0.1)
 
 def lookup(path):
   m = ROOT
@@ -210,39 +166,45 @@ def lookup(path):
 for i in range(250):
   window.redraw()
 
-steps = 250
+fade = 100
+steps = 300
 balls = []
 
 for line in open("sequence"):
   if line.strip() == "--":
+    balls.reverse()
+    for b, _, _ in balls:
+      window.add(b, 0, 0, 1.0, 1.0)
+    balls.reverse()
+
     for b, start, stop in balls:
       cls, vnd = start.split(":")
       if cls == "B":
         b.vendor = BRKS[vnd].dequeue()
       else:
-        for i in range(51):
-          b.alpha = i/50.0
+        for i in range(fade + 1):
+          b.alpha = i/float(fade)
           window.redraw()
 
-    for i in range(steps):
+    for i in range(steps+1):
       for b, start, stop in balls:
         x1, y1 = lookup(start)
         x2, y2 = lookup(stop)
         dx = x2 - x1
         dy = y2 - y1
-        b.x = x1 + dx*i/steps
-        b.y = y1 + dy*i/steps
-        b.angle = 2*pi*i/steps
+        b.x = x1 + dx*float(i)/steps
+        b.y = y1 + dy*float(i)/steps
+        b.angle = 2*pi*float(i)/steps
       window.redraw()
 
     for b, start, stop in balls:
       cls, vnd = stop.split(":")
       if cls == "B":
-        BRKS[vnd].enqueue(start.split(":")[-1])
+        BRKS[vnd].enqueue(b.vendor)
         window.redraw()
       else:
-        for i in range(51):
-          b.alpha = 1.0 - i/50.0
+        for i in range(fade + 1):
+          b.alpha = 1.0 - i/float(fade)
           window.redraw()
       window.remove(b)
     balls = []
@@ -252,11 +214,10 @@ for line in open("sequence"):
   else:
     start, stop = line.split()
     cls, vnd = start.split(":")
-    b = Ball(vnd)
+    b = Ball(BRKS[vnd].vendor)
     b.x, b.y = lookup(start)
     if cls == "C":
       b.alpha = 0.0
-    window.add(b, 0, 0, 1.0, 1.0)
     balls.append((b, start, stop))
 
-time.sleep(3)
+time.sleep(1)

@@ -53,6 +53,7 @@ class Screen(gtk.DrawingArea):
 
     cr.translate(0, height)
     cr.scale(width/1.0, -height/1.0)
+    cr.scale(9.0/16.0, 1.0)
 
     for widget in self.widgets:
       cr.save()
@@ -67,7 +68,7 @@ class Window:
     self.quit = quit
     self.window = gtk.Window()
     self.window.set_resizable(False)
-    self.window.set_geometry_hints(min_width=1024, min_height=768)
+    self.window.set_geometry_hints(min_width=1280, min_height=720)
 #    self.window.fullscreen()
     if self.quit:
       self.window.connect("delete-event", quit)
