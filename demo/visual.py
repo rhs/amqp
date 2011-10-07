@@ -11,6 +11,8 @@ for v in VENDORS:
 for v in CLIENTS:
   MESSAGES[v] = ImageSurface.create_from_png("images/message-%s.png" % v)
 
+SCREEN_H = 1.0
+SCREEN_W = 16.0/9.0
 BALL_SIZE = 0.1
 VEND_SIZE = 0.25
 VEND_W = VEND_SIZE
@@ -44,6 +46,9 @@ def component(cr, vendor):
 
 class Broker:
 
+  client = False
+  broker = True
+
   def __init__(self, vendor):
     self.vendor = vendor
     self.messages = []
@@ -70,6 +75,9 @@ class Broker:
         cr.restore()
 
 class Client:
+
+  client = True
+  broker = False
 
   def __init__(self, vendor):
     self.vendor = vendor
@@ -129,32 +137,25 @@ CLIS = {
   }
 
 window = Window()
-cpad = (1.7 - VEND_W*len(CLIS))/(len(CLIS)+1)
-window.add(Text("Clients"), 1.7/2, 0.9, 0.2, 0.05)
+cpad = (SCREEN_W - VEND_W*len(CLIS))/(len(CLIS)+1)
+window.add(Text("Clients"), SCREEN_W/2, 0.9, 0.2, 0.05)
 idx = 0
 for c in ("RH", "MS", "IN", "AP", "SW"):
   window.add(CLIS[c], cpad*(idx+1) + VEND_W*idx, 0.9 - VEND_H, VEND_W, VEND_H)
   idx += 1
 
-window.add(Line(0.0375, 0.5, 1.7 - 0.0375, 0.5), 0, 0, 1, 1)
+window.add(Line(0.0375, 0.5, SCREEN_W - 0.0375, 0.5), 0, 0, 1, 1)
 
-window.add(Text("Brokers"), 1.7/2, 0.05, 0.2, 0.05)
-bpad = (1.7 - VEND_W*len(BRKS))/(len(BRKS)+1)
+window.add(Text("Brokers"), SCREEN_W/2, 0.05, 0.2, 0.05)
+bpad = (SCREEN_W - VEND_W*len(BRKS))/(len(BRKS)+1)
 idx = 0
 for c in ("RH", "VM", "MS", "IN", "AP", "SW"):
   window.add(BRKS[c], bpad*(idx+1) + VEND_W*idx, 0.1, VEND_W, VEND_H)
   idx += 1
 
-CLI_COORDS = {}
-for k, v in CLIS.items():
-  CLI_COORDS[k] = (v._Screen__x + v._Screen__w/2, v._Screen__y + v._Screen__h/2)
-BRK_COORDS = {}
-for k, v in BRKS.items():
-  BRK_COORDS[k] = (v._Screen__x + v._Screen__w/2, v._Screen__y + v._Screen__h/2)
-
 ROOT = {
-  "C": CLI_COORDS,
-  "B": BRK_COORDS
+  "C": CLIS,
+  "B": BRKS
   }
 
 def lookup(path):
@@ -168,56 +169,73 @@ for i in range(250):
 
 fade = 100
 steps = 300
-balls = []
 
-for line in open("sequence"):
-  if line.strip() == "--":
-    balls.reverse()
-    for b, _, _ in balls:
-      window.add(b, 0, 0, 1.0, 1.0)
-    balls.reverse()
+class Path:
 
-    for b, start, stop in balls:
-      cls, vnd = start.split(":")
-      if cls == "B":
-        b.vendor = BRKS[vnd].dequeue()
-      else:
-        for i in range(fade + 1):
-          b.alpha = i/float(fade)
-          window.redraw()
+  def __init__(self, ball, start, stop):
+    self.ball = ball
+    self.start = start
+    self.stop = stop
 
-    for i in range(steps+1):
-      for b, start, stop in balls:
-        x1, y1 = lookup(start)
-        x2, y2 = lookup(stop)
-        dx = x2 - x1
-        dy = y2 - y1
-        b.x = x1 + dx*float(i)/steps
-        b.y = y1 + dy*float(i)/steps
-        b.angle = 2*pi*float(i)/steps
-      window.redraw()
+def center(w):
+  return (w._Screen__x + w._Screen__w/2, w._Screen__y + w._Screen__h/2)
 
-    for b, start, stop in balls:
-      cls, vnd = stop.split(":")
-      if cls == "B":
-        BRKS[vnd].enqueue(b.vendor)
+def go(paths):
+  paths.reverse()
+  for p in paths:
+    p.ball.x, p.ball.y = center(p.start)
+    if p.start.client:
+      p.ball.alpha = 0.0
+    window.add(p.ball, 0, 0, 1.0, 1.0)
+  paths.reverse()
+
+  # fade in and dequeue
+  for p in paths:
+    if p.start.client:
+      for i in range(fade + 1):
+        p.ball.alpha = i/float(fade)
         window.redraw()
-      else:
-        for i in range(fade + 1):
-          b.alpha = 1.0 - i/float(fade)
-          window.redraw()
-      window.remove(b)
-    balls = []
-    window.redraw()
-  elif line.strip().startswith("+"):
-    time.sleep(float(line.strip()[1:]))
-  else:
-    start, stop = line.split()
-    cls, vnd = start.split(":")
-    b = Ball(BRKS[vnd].vendor)
-    b.x, b.y = lookup(start)
-    if cls == "C":
-      b.alpha = 0.0
-    balls.append((b, start, stop))
+    elif p.start.broker:
+      p.ball.vendor = p.start.dequeue()
 
-time.sleep(1)
+  # travel
+  for i in range(steps+1):
+    for p in paths:
+      x1, y1 = center(p.start)
+      x2, y2 = center(p.stop)
+      dx = x2 - x1
+      dy = y2 - y1
+      p.ball.x = x1 + dx*float(i)/steps
+      p.ball.y = y1 + dy*float(i)/steps
+      p.ball.angle = 2*pi*float(i)/steps
+    window.redraw()
+
+  # fade out and enqueue
+  for p in paths:
+    if p.stop.broker:
+      p.stop.enqueue(p.ball.vendor)
+      window.redraw()
+    elif p.stop.client:
+      for i in range(fade + 1):
+        p.ball.alpha = 1.0 - i/float(fade)
+        window.redraw()
+    window.remove(p.ball)
+  window.redraw()
+
+def script(fname):
+  paths = []
+
+  for line in open(fname):
+    if line.strip() == "--":
+      go(paths)
+      paths = []
+    elif line.strip().startswith("+"):
+      time.sleep(float(line.strip()[1:]))
+    else:
+      start, stop = line.split()
+      cls, vnd = start.split(":")
+      paths.append(Path(Ball(BRKS[vnd].vendor), lookup(start), lookup(stop)))
+
+  time.sleep(1)
+
+script("sequence")
