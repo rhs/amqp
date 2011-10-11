@@ -1,0 +1,101 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+import sys
+from common import *
+
+conn = Connection(auth=True)
+host, port, user, pw = BRADDRS[RH]
+#conn.tracing("frm")
+conn.connect(host, port)
+conn.open(mechanism="PLAIN", username=user, password=pw)
+ssn = conn.session()
+lnk = ssn.sender("control")
+
+NODES = {}
+idx = 1
+for v in VENDORS:
+  NODES[v] = "node%s" % idx
+  idx += 1
+
+def node(c, b):
+  nd = NODES[c]
+  if b is MS:
+    if nd == "node4":
+      nd = "node9"
+    nd = "sb://int7001sbuser-0-9.servicebus.int7.windows-int.net/" + nd
+  return nd
+
+COUNTER = 0
+
+def counter():
+  global COUNTER
+  COUNTER += 1
+  return COUNTER
+
+def send(msg):
+  print msg
+  lnk.send(msg, settled=True)
+
+def settle():
+  while lnk.pending(True):
+    for t, l, r in lnk.pending():
+      print t, r.state
+      lnk.settle(t, r.state)
+
+def reset_all():
+  send(reset())
+
+def setup(clients, brokers):
+  for b in brokers:
+    bh, bp, bu, bw = BRADDRS[b]
+    for c in clients:
+      send(create_link(node(c, b), "receiver", "%s" % c, bh, bp, bu, bw, target=c))
+      for cc in clients:
+        send(create_link(node(c, b), "sender", "%s-to-%s" % (cc, c), bh, bp, bu, bw, target=cc))
+
+def permute(start, stop, via, count=1):
+  for c1 in start:
+    for c2 in stop:
+      for b in via:
+        for i in range(count):
+          send(send_message("%s-to-%s" % (c1, c2), "%s:%s" % (b, counter()), target=c1))
+
+def self_ping(clients, brokers):
+  for c in clients:
+    permute([c], [c], brokers)
+
+ACTIONS = {
+  "reset": reset_all,
+  "setup": lambda: setup(CLIENTS, BROKERS),
+  "all": lambda: permute(CLIENTS, CLIENTS, BROKERS),
+  "self-ping": self_ping
+  }
+
+ACTIONS[sys.argv[1]]()
+
+settle()
+
+lnk.close()
+ssn.close()
+conn.close()
+
+for tag, local, remote in lnk.get_unsettled():
+  print "UNSETTLED:", tag, local, remote

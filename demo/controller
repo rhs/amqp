@@ -43,9 +43,12 @@ class Controller:
 
   def relay(self, msg):
     target = msg["target"]
+    matches = []
     for c in self.clients:
       if match(c.vendor, target):
         c.send(msg)
+        matches.append(c.vendor)
+    print "RELAYED[%s] %s" % (", ".join(matches) or ("none"), msg)
     return ACCEPTED
 
   def announce(self, msg):

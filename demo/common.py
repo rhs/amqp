@@ -111,3 +111,37 @@ BRADDRS = {
   SW: ("mail.iit.de", 5672, "demo", "demo"),
   MS: ("int7001sbuser-0-9.servicebus.int7.windows-int.net", 5672, "user", "Passw0rd!12")
   }
+
+def reset(target="*"):
+  msg = Message()
+  msg["opcode"] = "reset"
+  msg["target"] = target
+  return msg
+
+def create_link(address, role="sender", ref=None, host="0.0.0.0", port="5672",
+                user="demo", password="demo", target="*"):
+  msg = Message()
+  msg["opcode"] = "create-link"
+  msg["address"] = address
+  msg["role"] = role
+  msg["link-ref"] = ref or "%s.%s" % (address, role)
+  msg["host"] = host
+  msg["port"] = port
+  msg["sasl-user"] = user
+  msg["sasl-password"] = password
+  msg["target"] = target
+  return msg
+
+def send_message(ref, id, target="*"):
+  msg = Message(content="AMQP-%s" % id)
+  msg["opcode"] = "send-message"
+  msg["link-ref"] = ref
+  msg["message-id"] = id
+  msg["target"] = target
+  return msg
+
+OPCODES = {
+  "create-link": create_link,
+  "send-message": send_message,
+  "reset": reset
+  }

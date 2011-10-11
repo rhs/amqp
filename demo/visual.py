@@ -1,4 +1,4 @@
-import sys, time
+import sys, time, common
 from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
@@ -121,26 +121,26 @@ class Text:
     cr.stroke()
 
 BRKS = {
-  "RH": Broker(RH),
-  "VM": Broker(VM),
-  "MS": Broker(MS),
-  "IN": Broker(IN),
-  "AP": Broker(AP),
-  "SW": Broker(SW)
+  RH: Broker(RH),
+  VM: Broker(VM),
+  MS: Broker(MS),
+  IN: Broker(IN),
+  AP: Broker(AP),
+  SW: Broker(SW)
   }
 CLIS = {
-  "RH": Client(RH),
-  "MS": Client(MS),
-  "IN": Client(IN),
-  "AP": Client(AP),
-  "SW": Client(SW)
+  RH: Client(RH),
+  MS: Client(MS),
+  IN: Client(IN),
+  AP: Client(AP),
+  SW: Client(SW)
   }
 
 window = Window()
 cpad = (SCREEN_W - VEND_W*len(CLIS))/(len(CLIS)+1)
 window.add(Text("Clients"), SCREEN_W/2, 0.9, 0.2, 0.05)
 idx = 0
-for c in ("RH", "MS", "IN", "AP", "SW"):
+for c in (RH, MS, IN, AP, SW):
   window.add(CLIS[c], cpad*(idx+1) + VEND_W*idx, 0.9 - VEND_H, VEND_W, VEND_H)
   idx += 1
 
@@ -149,7 +149,7 @@ window.add(Line(0.0375, 0.5, SCREEN_W - 0.0375, 0.5), 0, 0, 1, 1)
 window.add(Text("Brokers"), SCREEN_W/2, 0.05, 0.2, 0.05)
 bpad = (SCREEN_W - VEND_W*len(BRKS))/(len(BRKS)+1)
 idx = 0
-for c in ("RH", "VM", "MS", "IN", "AP", "SW"):
+for c in (RH, VM, MS, IN, AP, SW):
   window.add(BRKS[c], bpad*(idx+1) + VEND_W*idx, 0.1, VEND_W, VEND_H)
   idx += 1
 
@@ -159,10 +159,8 @@ ROOT = {
   }
 
 def lookup(path):
-  m = ROOT
-  for x in path.split(":"):
-    m = m[x]
-  return m
+  cls, vnd = path.split(":")
+  return ROOT[cls][getattr(common, vnd)]
 
 for i in range(250):
   window.redraw()
@@ -233,9 +231,34 @@ def script(fname):
       time.sleep(float(line.strip()[1:]))
     else:
       start, stop = line.split()
-      cls, vnd = start.split(":")
-      paths.append(Path(Ball(BRKS[vnd].vendor), lookup(start), lookup(stop)))
+      s = lookup(start)
+      paths.append(Path(Ball(s.vendor), lookup(start), lookup(stop)))
 
   time.sleep(1)
 
+class Listener:
+
+  def __init__(self, ssn, lnk):
+    pass
+
+  def log(self, msg):
+    print "LOG:", msg
+    action = msg["action"]
+    vendor = msg["vendor"]
+    cli = CLIS[vendor]
+    brkv, num = msg["message-id"].split(":")
+    brk = BRKS[brkv]
+    if action == "sent":
+      start = cli
+      stop = brk
+    else:
+      start = brk
+      stop = cli
+    paths = [Path(Ball(start.vendor), start, stop)]
+    go(paths)
+
+def listen():
+  main(Listener, "log")
+
 script("sequence")
+#listen()
