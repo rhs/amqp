@@ -70,7 +70,7 @@ def options():
                     help="enable tracing for specified categories")
   return parser
 
-def open_conn(args):
+def open_conn(opts):
   conn = Connection(auth=True)
   conn.tracing(*opts.trace.split())
   conn.connect(opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0", opts.port)
@@ -84,7 +84,7 @@ def main(cls, source):
   if args:
     parser.error("unrecognized arguments")
 
-  conn = open_conn(args)
+  conn = open_conn(opts)
   ssn = conn.session()
   lnk = ssn.receiver(source, limit=100)
   try:
