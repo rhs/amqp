@@ -53,10 +53,11 @@ class Entry:
     return self.acquired
 
   def release(self):
-    self.acquired = None
-    for s in self.queue.sources:
-      if self.id < s.next.id:
-        s.reset()
+    if self.acquired:
+      self.acquired = None
+      for s in self.queue.sources:
+        if self.id < s.next.id:
+          s.reset()
 
   def __del__(self):
     if self.item is not None:
