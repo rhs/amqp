@@ -284,11 +284,13 @@ class Listener:
   def __init__(self):
     self.messages = []
     self.sent = set()
+    self.idlecount = 0
 
   def log(self, msg):
     print "LOG:", msg
     if msg.get("message-id", "").count(":") == 2:
       self.messages.append(msg)
+    self.idlecount = 0
 
   def process(self):
     paths = []
@@ -318,6 +320,13 @@ class Listener:
           self.messages.remove(msg)
     if paths: go(paths)
 
+  def idle(self):
+    self.idlecount += 1
+    if self.idlecount >= 10:
+      self.process()
+    else:
+      window.redraw()
+
 if opts.script:
   script(opts.script)
 
@@ -326,7 +335,7 @@ if opts.listen:
   ssn = conn.session()
   lnk = ssn.receiver("log", limit=100)
   try:
-    loop(lnk, Listener(), True, timeout=1)
+    loop(lnk, Listener(), timeout=0.1)
   except KeyboardInterrupt:
     pass
   lnk.close()

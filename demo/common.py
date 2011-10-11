@@ -20,27 +20,31 @@
 import optparse, os, traceback
 from client import *
 
-def loop(link, obj, batch=False, timeout=3):
+def loop(link, obj, batch=False, timeout=None):
   link.flow(100)
-  while link.pending(block=True):
-    msg = link.get()
-    link.disposition(msg.delivery_tag, dispatch(msg, obj))
-    if link.credit() < 50: link.flow(100)
-    settle(link)
-    if batch:
-      if timeout:
-        try:
-          more = link.pending(block=True, timeout=timeout)
-        except Timeout:
-          more = False
-      else:
-        more = link.pending()
-      if not more:
-        try:
-          obj.process()
-        except:
-          print "error processing"
-          traceback.print_exc()
+  while True:
+    try:
+      more = link.pending(block=True, timeout=timeout)
+    except Timeout:
+      try:
+        obj.idle()
+      except:
+        print "error idling"
+        traceback.print_exc()
+      continue
+
+    if more:
+      msg = link.get()
+      link.disposition(msg.delivery_tag, dispatch(msg, obj))
+      if link.credit() < 50: link.flow(100)
+      settle(link)
+      if batch:
+        if not link.pending():
+          try:
+            obj.process()
+          except:
+            print "error processing"
+            traceback.print_exc()
 
   settle(link)
 
