@@ -105,6 +105,8 @@ class Connection(Dispatcher):
 
   def closed(self):
     Dispatcher.closed(self)
+    if not self.close_rcvd:
+      self.exception = ConnectionError("connection aborted")
     self.close_rcvd = True
     self.close_sent = True
 
