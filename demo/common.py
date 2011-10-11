@@ -136,7 +136,7 @@ def create_link(address, role="sender", ref=None, host="0.0.0.0", port="5672",
   return msg
 
 def send_message(ref, id, target="*"):
-  msg = Message(content="AMQP-%s" % id)
+  msg = Message(content=u"AMQP-%s" % id)
   msg["opcode"] = "send-message"
   msg["link-ref"] = ref
   msg["message-id"] = id
