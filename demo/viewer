@@ -324,6 +324,7 @@ class Listener:
     self.idlecount += 1
     if self.idlecount >= 10:
       self.process()
+      window.redraw()
     else:
       window.redraw()
 
