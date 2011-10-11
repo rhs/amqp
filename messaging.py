@@ -47,6 +47,12 @@ class Message:
         if hasattr(o, k):
           setattr(o, k, v)
 
+  def get(self, key, default=None):
+    if self.application_properties:
+      return self.application_properties.get(key, default)
+    else:
+      return default
+
   def __getitem__(self, key):
     if self.application_properties:
       return self.application_properties[key]

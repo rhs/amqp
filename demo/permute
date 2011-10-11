@@ -66,25 +66,32 @@ def reset_all():
 def setup(clients, brokers):
   for b in brokers:
     bh, bp, bu, bw = BRADDRS[b]
+    bp = str(bp)
     for c in clients:
-      send(create_link(node(c, b), "receiver", "%s" % c, bh, bp, bu, bw, target=c))
+      send(create_link(node(c, b), "receiver", "%s-via-%s" % (c, b), bh, bp, bu, bw, target=c))
       for cc in clients:
-        send(create_link(node(c, b), "sender", "%s-to-%s" % (cc, c), bh, bp, bu, bw, target=cc))
+        send(create_link(node(c, b), "sender", "%s-to-%s-via-%s" % (cc, c, b), bh, bp, bu, bw, target=cc))
 
 def permute(start, stop, via, count=1):
   for c1 in start:
     for c2 in stop:
       for b in via:
         for i in range(count):
-          send(send_message("%s-to-%s" % (c1, c2), "%s:%s" % (b, counter()), target=c1))
+          send(send_message("%s-to-%s-via-%s" % (c1, c2, b), "%s:%s:%s" % (c1, b, counter()), target=c1))
 
 def self_ping(clients, brokers):
   for c in clients:
     permute([c], [c], brokers)
 
+def proprietary(vendors):
+  for v in vendors:
+    permute([v], [v], [v])
+
 ACTIONS = {
   "reset": reset_all,
   "setup": lambda: setup(CLIENTS, BROKERS),
+  "proprietary": lambda: proprietary(BROKERS),
+  "interop": lambda: (permute([RH], [MS], [VM]), permute([MS], [RH], [VM])),
   "all": lambda: permute(CLIENTS, CLIENTS, BROKERS),
   "self-ping": self_ping
   }

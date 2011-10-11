@@ -30,6 +30,7 @@ for v in VENDORS:
   LOGOS[v] = ImageSurface.create_from_png("images/broker-%s.png" % v)
 for v in CLIENTS:
   MESSAGES[v] = ImageSurface.create_from_png("images/message-%s.png" % v)
+MESSAGE = ImageSurface.create_from_png("images/message.png")
 
 SCREEN_H = 1.0
 SCREEN_W = 16.0/9.0
@@ -52,7 +53,7 @@ class Ball:
     cr.translate(self.x, self.y)
     cr.rotate(self.angle)
     cr.translate(-scale/2, scale/2)
-    ball = MESSAGES[self.vendor]
+    ball = MESSAGES.get(self.vendor, MESSAGE)
     cr.scale(scale/ball.get_width(), -scale/ball.get_height())
     cr.set_source_surface(ball)
     cr.paint_with_alpha(self.alpha)
@@ -159,7 +160,7 @@ CLIS = {
 parser = options()
 
 parser.add_option("-s", "--script", help="drive graphics from script")
-parser.add_option("-l", "--listen", default=False,
+parser.add_option("-l", "--listen", action="store_true",
                   help="listen after running script")
 parser.add_option("-f", "--fullscreen", action="store_true",
                   help="run in fullscreen mode")
@@ -229,8 +230,10 @@ def go(paths):
       for i in range(fade + 1):
         p.ball.alpha = i/float(fade)
         window.redraw()
-    elif p.start.broker:
-      p.ball.vendor = p.start.dequeue()
+    elif p.start.broker and p.start.messages:
+      vnd = p.start.dequeue()
+      if p.ball.vendor == "none":
+        p.ball.vendor = vnd
 
   # travel
   for i in range(steps+1):
@@ -268,37 +271,62 @@ def script(fname):
     else:
       start, stop = line.split()
       s = lookup(start)
-      paths.append(Path(Ball(s.vendor), lookup(start), lookup(stop)))
+      if start[0] == "C":
+        org = s.vendor
+      else:
+        org = "none"
+      paths.append(Path(Ball(org), lookup(start), lookup(stop)))
 
   time.sleep(1)
 
 class Listener:
 
+  def __init__(self):
+    self.messages = []
+    self.sent = set()
+
   def log(self, msg):
     print "LOG:", msg
-    action = msg["action"]
-    vendor = msg["vendor"]
-    cli = CLIS[vendor]
-    brkv, num = msg["message-id"].split(":")
-    brk = BRKS[brkv]
-    if action == "sent":
-      start = cli
-      stop = brk
-    else:
-      start = brk
-      stop = cli
-    paths = [Path(Ball(start.vendor), start, stop)]
-    go(paths)
+    if msg.get("message-id", "").count(":") == 2:
+      self.messages.append(msg)
+
+  def process(self):
+    paths = []
+    for msg in list(self.messages):
+      action = msg["action"]
+      vendor = msg["vendor"]
+      cli = CLIS[vendor]
+      mid = msg["message-id"]
+      orgv, brkv, num = mid.split(":")
+      brk = BRKS[brkv]
+      if action == "sent":
+        self.sent.add(mid)
+        self.messages.remove(msg)
+        paths.append(Path(Ball(orgv), cli, brk))
+    if paths: go(paths)
+    paths = []
+    for msg in list(self.messages):
+      action = msg["action"]
+      vendor = msg["vendor"]
+      cli = CLIS[vendor]
+      mid = msg["message-id"]
+      orgv, brkv, num = mid.split(":")
+      brk = BRKS[brkv]
+      if action == "received":
+        if mid in self.sent:
+          paths.append(Path(Ball(orgv), brk, cli))
+          self.messages.remove(msg)
+    if paths: go(paths)
 
 if opts.script:
   script(opts.script)
 
 if opts.listen:
-  conn = open_conn(args)
+  conn = open_conn(opts)
   ssn = conn.session()
-  lnk = ssn.receiver(source, limit=100)
+  lnk = ssn.receiver("log", limit=100)
   try:
-    loop(lnk, Listener())
+    loop(lnk, Listener(), True, timeout=1)
   except KeyboardInterrupt:
     pass
   lnk.close()
