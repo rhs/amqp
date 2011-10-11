@@ -64,12 +64,14 @@ class Screen(gtk.DrawingArea):
 
 class Window:
 
-  def __init__(self, quit=None):
+  def __init__(self, quit=None, width=1280, height=720, resizable=True, fullscreen=False):
     self.quit = quit
     self.window = gtk.Window()
-    self.window.set_resizable(False)
-    self.window.set_geometry_hints(min_width=1280, min_height=720)
-#    self.window.fullscreen()
+    if fullscreen:
+      self.window.fullscreen()
+    elif width and height:
+      self.window.set_resizable(resizable)
+      self.window.set_geometry_hints(min_width=width, min_height=height)
     if self.quit:
       self.window.connect("delete-event", quit)
     self.screen = Screen()

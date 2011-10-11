@@ -20,7 +20,7 @@
 
 from common import *
 
-opts, args = options()
+opts, args = options().parse_args()
 
 opargs = []
 kwargs = {}

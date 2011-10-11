@@ -57,8 +57,7 @@ def unknown(msg):
   return ACCEPTED
 
 def options():
-  parser = optparse.OptionParser(usage="usage: %prog [options] <address>",
-                                 description="receive messages")
+  parser = optparse.OptionParser(usage="usage: %prog [options]")
   parser.add_option("-H", "--host",
                     help="host to connect to (default 0.0.0.0)")
   parser.add_option("-p", "--port", type=int, default=5672,
@@ -69,19 +68,23 @@ def options():
                     help="password to use for authentication")
   parser.add_option("-t", "--trace", default="err",
                     help="enable tracing for specified categories")
+  return parser
 
-  return parser.parse_args()
-
-def main(cls, source):
-  opts, args = options()
-
-  if args:
-    parser.error("unrecognized arguments")
-
+def open_conn(args):
   conn = Connection(auth=True)
   conn.tracing(*opts.trace.split())
   conn.connect(opts.host or os.getenv('AMQP_BROKER') or "0.0.0.0", opts.port)
   conn.open(mechanism="PLAIN", username=opts.username, password=opts.password)
+  return conn
+
+def main(cls, source):
+  parser = options()
+  opts, args = parser.parse_args()
+
+  if args:
+    parser.error("unrecognized arguments")
+
+  conn = open_conn(args)
   ssn = conn.session()
   lnk = ssn.receiver(source, limit=100)
   try:

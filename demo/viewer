@@ -1,3 +1,23 @@
+#!/usr/bin/python
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
 import sys, time, common
 from math import pi
 from window import Window
@@ -136,7 +156,23 @@ CLIS = {
   SW: Client(SW)
   }
 
-window = Window()
+parser = options()
+
+parser.add_option("-s", "--script", help="drive graphics from script")
+parser.add_option("-l", "--listen", default=False,
+                  help="listen after running script")
+parser.add_option("-f", "--fullscreen", action="store_true",
+                  help="run in fullscreen mode")
+
+opts, args = parser.parse_args()
+
+if args:
+  parser.error("unrecognized arguments")
+
+if not (opts.script or opts.listen):
+  parser.error("need one of script or listen options")
+
+window = Window(resizable=False, fullscreen=opts.fullscreen)
 cpad = (SCREEN_W - VEND_W*len(CLIS))/(len(CLIS)+1)
 window.add(Text("Clients"), SCREEN_W/2, 0.9, 0.2, 0.05)
 idx = 0
@@ -238,9 +274,6 @@ def script(fname):
 
 class Listener:
 
-  def __init__(self, ssn, lnk):
-    pass
-
   def log(self, msg):
     print "LOG:", msg
     action = msg["action"]
@@ -257,8 +290,17 @@ class Listener:
     paths = [Path(Ball(start.vendor), start, stop)]
     go(paths)
 
-def listen():
-  main(Listener, "log")
+if opts.script:
+  script(opts.script)
 
-script("sequence")
-#listen()
+if opts.listen:
+  conn = open_conn(args)
+  ssn = conn.session()
+  lnk = ssn.receiver(source, limit=100)
+  try:
+    loop(lnk, Listener())
+  except KeyboardInterrupt:
+    pass
+  lnk.close()
+  ssn.close()
+  conn.close()
