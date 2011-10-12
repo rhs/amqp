@@ -18,11 +18,13 @@
 # under the License.
 #
 
-import sys, time, common
+import sys, time, common, random
 from math import pi
 from window import Window
 from cairo import ImageSurface, LINE_CAP_ROUND
 from common import *
+
+RAND = random.Random(42)
 
 LOGOS = {}
 MESSAGES = {}
@@ -285,6 +287,7 @@ class Listener:
     self.messages = []
     self.sent = set()
     self.idlecount = 0
+    self.fill = True
 
   def log(self, msg):
     print "LOG:", msg
@@ -292,33 +295,99 @@ class Listener:
       self.messages.append(msg)
     self.idlecount = 0
 
+  def find_to(self, broker, origins, messages):
+    for m in self.messages:
+      if m["action"] == "sent":
+        org, brk, num = m["message-id"].split(":")
+        if org not in origins and brk == broker and m not in messages:
+          origins.add(org)
+          return m
+
+  def find_id(self, id, dests, messages):
+    for m in self.messages:
+      dst = m["vendor"]
+      if dst not in dests and m["message-id"] == id and m not in messages:
+        dests.add(dst)
+        return m
+
+  def find_enqueues(self, messages):
+    origins = set()
+    brokers = BROKERS
+    RAND.shuffle(brokers)
+    for b in brokers:
+      m = self.find_to(b, origins, messages)
+      if m: yield m
+
+  def find_dequeues(self, messages):
+    dests = set()
+    for mid in self.sent:
+      m = self.find_id(mid, dests, messages)
+      if m: yield m
+
+  def wave(self):
+    origins = set()
+    dests = set()
+    messages = []
+
+    empty = True
+    full = False
+    for b in BRKS.values():
+      if b.messages:
+        empty = False
+      if len(b.messages) > 2:
+        full = True
+
+    if empty:
+      self.fill = True
+    if full:
+      self.fill = False
+
+    while len(messages) < 5:
+      oldlen = len(messages)
+      if self.fill:
+        messages.extend(self.find_enqueues(messages))
+      else:
+        messages.extend(self.find_dequeues(messages))
+
+      if not messages and self.messages:
+        if self.fill:
+          messages.extend(self.find_dequeues(messages))
+        else:
+          messages.extend(self.find_enqueues(messages))
+      if len(messages) == oldlen:
+        break
+
+    if not messages and self.messages:
+      messages.append(self.messages[0])
+
+    return messages
+
+  def path(self, msg):
+    action = msg["action"]
+    vendor = msg["vendor"]
+    cli = CLIS[vendor]
+    mid = msg["message-id"]
+    orgv, brkv, num = mid.split(":")
+    brk = BRKS[brkv]
+    if action == "sent":
+      return Path(Ball(orgv), cli, brk)
+    else:
+      return Path(Ball(orgv), brk, cli)
+
   def process(self):
-    paths = []
-    for msg in list(self.messages):
-      action = msg["action"]
-      vendor = msg["vendor"]
-      cli = CLIS[vendor]
-      mid = msg["message-id"]
-      orgv, brkv, num = mid.split(":")
-      brk = BRKS[brkv]
-      if action == "sent":
-        self.sent.add(mid)
-        self.messages.remove(msg)
-        paths.append(Path(Ball(orgv), cli, brk))
-    if paths: go(paths)
-    paths = []
-    for msg in list(self.messages):
-      action = msg["action"]
-      vendor = msg["vendor"]
-      cli = CLIS[vendor]
-      mid = msg["message-id"]
-      orgv, brkv, num = mid.split(":")
-      brk = BRKS[brkv]
-      if action == "received":
-        if mid in self.sent:
-          paths.append(Path(Ball(orgv), brk, cli))
-          self.messages.remove(msg)
-    if paths: go(paths)
+    while True:
+      messages = self.wave()
+      if not messages:
+        break
+      paths = []
+      for m in messages:
+        paths.append(self.path(m))
+        self.messages.remove(m)
+        if m["action"] == "sent":
+          self.sent.add(m["message-id"])
+        else:
+          self.sent.discard(m["message-id"])
+      if paths: go(paths)
 
   def idle(self):
     self.idlecount += 1

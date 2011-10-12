@@ -18,7 +18,7 @@
 # under the License.
 #
 
-import sys
+import sys, time
 from common import *
 
 conn = Connection(auth=True)
@@ -63,21 +63,24 @@ def settle():
 def reset_all():
   send(reset())
 
-def setup(clients, brokers):
-  for b in brokers:
-    bh, bp, bu, bw = BRADDRS[b]
-    bp = str(bp)
-    for c in clients:
+def setup(clients, brokers, delay=None):
+  for c in clients:
+    for b in brokers:
+      bh, bp, bu, bw = BRADDRS[b]
+      bp = str(bp)
       send(create_link(node(c, b), "receiver", "%s-via-%s" % (c, b), bh, bp, bu, bw, target=c))
+      if (b is MS) and delay: time.sleep(delay)
       for cc in clients:
         send(create_link(node(c, b), "sender", "%s-to-%s-via-%s" % (cc, c, b), bh, bp, bu, bw, target=cc))
+        if (b is MS) and delay: time.sleep(delay)
 
-def permute(start, stop, via, count=1):
-  for c1 in start:
-    for c2 in stop:
+def permute(start, stop, via, count=1, delay=None):
+  for c2 in stop:
+    for c1 in start:
       for b in via:
         for i in range(count):
           send(send_message("%s-to-%s-via-%s" % (c1, c2, b), "%s:%s:%s" % (c1, b, counter()), target=c1))
+      if delay: time.sleep(delay)
 
 def self_ping(clients, brokers):
   for c in clients:
@@ -89,7 +92,7 @@ def proprietary(vendors):
 
 ACTIONS = {
   "reset": reset_all,
-  "setup": lambda: setup(CLIENTS, BROKERS),
+  "setup": lambda: setup(CLIENTS, BROKERS, delay=1),
   "proprietary": lambda: proprietary(BROKERS),
   "interop": lambda: (permute([RH], [MS], [VM]), permute([MS], [RH], [VM])),
   "all": lambda: permute(CLIENTS, CLIENTS, BROKERS),

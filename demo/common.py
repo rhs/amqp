@@ -127,9 +127,10 @@ BROKERS = [RH, VM, IN, AP, SW, MS]
 BRADDRS = {
   RH: ("ec2-50-16-33-219.compute-1.amazonaws.com", 5672, "demo", "demo"),
   VM: ("ec2-79-125-83-217.eu-west-1.compute.amazonaws.com", 5672, "guest", "guest"),
-  IN: ("insight.inetco.com", 5672, "demo", "demo"),
+  IN: ("ec2-50-16-12-194.compute-1.amazonaws.com", 5672, "demo", "demo"),
   AP: ("ec2-50-16-33-219.compute-1.amazonaws.com", 15672, "guest", "guest"),
-  SW: ("mail.iit.de", 5672, "demo", "demo"),
+  SW: ("ec2-75-101-173-138.compute-1.amazonaws.com", 5672, "demo", "demo"),
+#  SW: ("mail.iit.de", 5672, "demo", "demo"),
   MS: ("int7001sbuser-0-9.servicebus.int7.windows-int.net", 5672, "user", "Passw0rd!12")
   }
 
