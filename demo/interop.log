@@ -1,4 +1,4 @@
-Message(delivery_tag='10', properties={u'action': u'sent', u'vendor': u'redhat', u'message-id': u'redhat:vmware:1', u'opcode': u'log'})
-Message(delivery_tag='11', properties={u'action': u'received', u'opcode': u'log', u'message-vendor': u'redhat', u'message-id': u'redhat:vmware:1', u'vendor': u'microsoft'}, content=u'AMQP-redhat:vmware:1')
-Message(delivery_tag='12', properties={u'action': u'received', u'vendor': u'redhat', u'message-vendor': u'microsoft', u'message-id': u'microsoft:vmware:2', u'opcode': u'log'})
-Message(delivery_tag='13', properties={u'action': u'sent', u'opcode': u'log', u'message-vendor': u'microsoft', u'message-id': u'microsoft:vmware:2', u'vendor': u'microsoft'}, content=u'AMQP-microsoft:vmware:2')
+Message(properties={u'action': u'sent', u'vendor': u'redhat', u'message-id': u'redhat:vmware:1', u'opcode': u'log'})
+Message(properties={u'action': u'received', u'opcode': u'log', u'message-vendor': u'redhat', u'message-id': u'redhat:vmware:1', u'vendor': u'microsoft'}, content=u'AMQP-redhat:vmware:1')
+Message(properties={u'action': u'received', u'vendor': u'redhat', u'message-vendor': u'microsoft', u'message-id': u'microsoft:vmware:2', u'opcode': u'log'})
+Message(properties={u'action': u'sent', u'opcode': u'log', u'message-vendor': u'microsoft', u'message-id': u'microsoft:vmware:2', u'vendor': u'microsoft'}, content=u'AMQP-microsoft:vmware:2')

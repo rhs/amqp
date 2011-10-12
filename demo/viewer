@@ -289,11 +289,18 @@ class Listener:
     self.idlecount = 0
     self.fill = True
 
+  def viewer(self, msg):
+    global fade, steps
+    fade = int(msg["fade"])
+    steps = int(msg["steps"])
+    return ACCEPTED
+
   def log(self, msg):
     print "LOG:", msg
     if msg.get("message-id", "").count(":") == 2:
       self.messages.append(msg)
     self.idlecount = 0
+    return ACCEPTED
 
   def find_to(self, broker, origins, messages):
     for m in self.messages:
