@@ -33,6 +33,7 @@ for v in VENDORS:
 for v in CLIENTS:
   MESSAGES[v] = ImageSurface.create_from_png("images/message-%s.png" % v)
 MESSAGE = ImageSurface.create_from_png("images/message.png")
+IPU = ImageSurface.create_from_png("images/message-ipu.png")
 
 SCREEN_H = 1.0
 SCREEN_W = 16.0/9.0
@@ -40,6 +41,12 @@ BALL_SIZE = 0.1
 VEND_SIZE = 0.25
 VEND_W = VEND_SIZE
 VEND_H = VEND_SIZE
+
+def message_image(vendor):
+  if opts.ipu:
+    return IPU
+  else:
+    return MESSAGES.get(vendor, MESSAGE)
 
 class Ball:
 
@@ -55,7 +62,7 @@ class Ball:
     cr.translate(self.x, self.y)
     cr.rotate(self.angle)
     cr.translate(-scale/2, scale/2)
-    ball = MESSAGES.get(self.vendor, MESSAGE)
+    ball = message_image(self.vendor)
     cr.scale(scale/ball.get_width(), -scale/ball.get_height())
     cr.set_source_surface(ball)
     cr.paint_with_alpha(self.alpha)
@@ -89,7 +96,7 @@ class Broker:
     if self.messages:
       cr.translate((1.0 - BALL_SIZE/VEND_W)/2, 0.55 + 0.5*BALL_SIZE/VEND_H)
       for i in range(len(self.messages)):
-        msg = MESSAGES[self.messages[len(self.messages) - 1 - i]]
+        msg = message_image(self.messages[len(self.messages) - 1 - i])
         cr.save()
         cr.translate(0, 0.1*(i - len(self.messages)/2.0))
         cr.scale(BALL_SIZE/(VEND_W*msg.get_width()), -BALL_SIZE/(VEND_H*msg.get_height()))
@@ -166,6 +173,7 @@ parser.add_option("-l", "--listen", action="store_true",
                   help="listen after running script")
 parser.add_option("-f", "--fullscreen", action="store_true",
                   help="run in fullscreen mode")
+parser.add_option("-i", "--ipu", action="store_true")
 
 opts, args = parser.parse_args()
 
