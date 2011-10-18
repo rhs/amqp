@@ -34,6 +34,7 @@ for v in CLIENTS:
   MESSAGES[v] = ImageSurface.create_from_png("images/message-%s.png" % v)
 MESSAGE = ImageSurface.create_from_png("images/message.png")
 IPU = ImageSurface.create_from_png("images/message-ipu.png")
+BEAKER = ImageSurface.create_from_png("images/message-beaker.png")
 
 SCREEN_H = 1.0
 SCREEN_W = 16.0/9.0
@@ -43,10 +44,7 @@ VEND_W = VEND_SIZE
 VEND_H = VEND_SIZE
 
 def message_image(vendor):
-  if opts.ipu:
-    return IPU
-  else:
-    return MESSAGES.get(vendor, MESSAGE)
+  return MESSAGES.get(vendor, MESSAGE)
 
 class Ball:
 
@@ -56,9 +54,10 @@ class Ball:
     self.y = 0.0
     self.angle = 0.0
     self.alpha = 1.0
+    self.scale = 1.0
 
   def draw(self, cr, w, h):
-    scale = BALL_SIZE
+    scale = self.scale*BALL_SIZE
     cr.translate(self.x, self.y)
     cr.rotate(self.angle)
     cr.translate(-scale/2, scale/2)
@@ -174,6 +173,9 @@ parser.add_option("-l", "--listen", action="store_true",
 parser.add_option("-f", "--fullscreen", action="store_true",
                   help="run in fullscreen mode")
 parser.add_option("-i", "--ipu", action="store_true")
+parser.add_option("-z", "--zoom", action="store_true",
+                  help="balls zoom as the cross the line")
+parser.add_option("-b", "--beaker", action="store_true")
 
 opts, args = parser.parse_args()
 
@@ -182,6 +184,13 @@ if args:
 
 if not (opts.script or opts.listen):
   parser.error("need one of script or listen options")
+
+if opts.ipu:
+  for key in MESSAGES:
+    MESSAGES[key] = IPU
+elif opts.beaker:
+  for key in MESSAGES:
+    MESSAGES[key] = BEAKER
 
 window = Window(resizable=False, fullscreen=opts.fullscreen)
 cpad = (SCREEN_W - VEND_W*len(CLIS))/(len(CLIS)+1)
@@ -255,6 +264,11 @@ def go(paths):
       p.ball.x = x1 + dx*float(i)/steps
       p.ball.y = y1 + dy*float(i)/steps
       p.ball.angle = 2*pi*float(i)/steps
+      if opts.zoom:
+        if i < steps/2:
+          p.ball.scale = 1.0 + float(i)/steps
+        else:
+          p.ball.scale = 1.0 + float(steps - i)/steps
     window.redraw()
 
   # fade out and enqueue
