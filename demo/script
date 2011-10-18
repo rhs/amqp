@@ -1,9 +1,10 @@
-C:RH B:RH
-C:MS B:RH
+C:RH B:VM
+C:MS B:VM
 --
-+2
-B:RH C:MS
+B:VM C:MS
+B:VM C:RH
 --
+C:IN B:RH
 C:MS B:SW
 --
 C:RH B:AP
